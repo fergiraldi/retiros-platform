@@ -1,6 +1,6 @@
 # Specs — Fase 1: Multi-inquilino, divulgação, inscrição e pagamento
 
-Especificação técnica derivada do [PRD](../../PRD.md). Toda regra aqui referencia a `RN-xxx` de origem; onde a spec **acrescenta** regra que não existia no PRD, isso está marcado com `[NOVA]` e a decisão precisa ser confirmada por você.
+Especificação técnica derivada do [PRD](../../PRD.md). Toda regra aqui referencia a `RN-xxx` de origem; onde a spec **acrescenta** regra que não existia no PRD, isso está marcado com `[NOVA]` e a decisão precisa ser confirmada por você. Hoje só `RN-417` e `RN-418` ([04-webhook.md](04-webhook.md)) seguem marcadas — decisão de segurança que o PRD ainda não fechou.
 
 **Leia [00-multi-inquilino.md](00-multi-inquilino.md) primeiro.** Todo o resto pressupõe o modelo de isolamento descrito lá.
 
@@ -19,9 +19,9 @@ Dentro:
 - Lista de espera com promoção automática
 - Cancelamento e reembolso
 - Consulta da inscrição por token
-- Painéis: central, denominação e operador
+- Painel do operador (RN-111) e painel do encontro (RN-115)
 
-Fora (fases 2 e 3): grupos, áreas de servição, cronograma, crachás, check-in, despesas, prestação de contas.
+Fora (fases 2 e 3): grupos, áreas de servição, cronograma, crachás, check-in, despesas, prestação de contas, painel da central e painel da denominação (RN-109, RN-110).
 
 ## Índice
 
@@ -37,17 +37,17 @@ Fora (fases 2 e 3): grupos, áreas de servição, cronograma, crachás, check-in
 
 ## Convenções
 
-**Identificadores** — `uuid v7` gerado pela aplicação (ordenável por tempo, bom para índice). Chave natural nunca é PK. Ids são únicos na plataforma inteira, nunca sequenciais por inquilino — id sequencial permite enumerar e estimar o tamanho de outra denominação.
+**Identificadores** (RNF-010) — `uuid v7` gerado pela aplicação (ordenável por tempo, bom para índice). Chave natural nunca é PK. Ids são únicos na plataforma inteira, nunca sequenciais por inquilino — id sequencial permite enumerar e estimar o tamanho de outra denominação.
 
 **Contexto de inquilino** — nenhum endpoint recebe `inquilinoId`. Área pública resolve pelo host, área autenticada pelo vínculo do usuário. Ver [00-multi-inquilino.md](00-multi-inquilino.md#3-resolução-do-inquilino).
 
-**Dinheiro** — `numeric(10,2)` no banco, `number` em reais nos contratos de API (o Mercado Pago recebe decimal, não centavos). Nunca `float`.
+**Dinheiro** (RNF-009) — `numeric(10,2)` no banco, `number` em reais nos contratos de API (o Mercado Pago recebe decimal, não centavos). Nunca `float`.
 
-**Datas** — `timestamptz` sempre, gravado em UTC. A interface converte para `America/Sao_Paulo`. Campos só-data (`data_inicio` do encontro) são `date`, sem fuso.
+**Datas** (RNF-008) — `timestamptz` sempre, gravado em UTC. A interface converte para `America/Sao_Paulo`. Campos só-data (`data_inicio` do encontro) são `date`, sem fuso.
 
 **Nomenclatura** — tabelas e colunas em `snake_case` português, seguindo o glossário do PRD. Contratos de API em `camelCase`. O mapeamento é responsabilidade da camada de persistência.
 
-**Erros da API** — envelope único:
+**Erros da API** (RNF-011) — envelope único:
 
 ```json
 {

@@ -12,7 +12,7 @@ Tratadas como certas, porque acontecem:
 4. **O corpo é magro.** Vem o id do recurso, não o estado. O estado se busca.
 5. **Exige resposta rápida.** Demora vira retry, que vira mais carga.
 
-**RN-400 [NOVA]** — O corpo do webhook **nunca** é fonte de verdade sobre a situação do pagamento. Recebido o evento, consultamos `GET /v1/payments/{id}` e usamos a resposta. O corpo serve para saber *o que* consultar. Isso resolve boa parte do problema de ordem: consulta sempre traz o estado atual, não o de quando o evento foi emitido.
+**RN-400** — O corpo do webhook **nunca** é fonte de verdade sobre a situação do pagamento. Recebido o evento, consultamos `GET /v1/payments/{id}` e usamos a resposta. O corpo serve para saber *o que* consultar. Isso resolve boa parte do problema de ordem: consulta sempre traz o estado atual, não o de quando o evento foi emitido.
 
 ---
 
@@ -48,11 +48,11 @@ sequenceDiagram
     end
 ```
 
-**RN-401 [NOVA]** — O endpoint responde `200` assim que grava o evento bruto. O processamento é assíncrono. Processar de forma síncrona significa que uma lentidão nossa vira retry do gateway, que vira mais lentidão.
+**RN-401** — O endpoint responde `200` assim que grava o evento bruto. O processamento é assíncrono. Processar de forma síncrona significa que uma lentidão nossa vira retry do gateway, que vira mais lentidão.
 
-**RN-402 [NOVA]** — Responde `200` mesmo para evento que não sabemos tratar (tipo desconhecido, pagamento de outra origem). `4xx`/`5xx` fazem o gateway reenviar indefinidamente algo que nunca vamos processar. O registro fica em `webhook_evento` com `resultado = 'ignorado'`.
+**RN-402** — Responde `200` mesmo para evento que não sabemos tratar (tipo desconhecido, pagamento de outra origem). `4xx`/`5xx` fazem o gateway reenviar indefinidamente algo que nunca vamos processar. O registro fica em `webhook_evento` com `resultado = 'ignorado'`.
 
-**RN-403 [NOVA]** — Única exceção ao `200`: assinatura inválida, que retorna `401` e é gravada com `assinatura_valida = false`. Volume anormal desses registros é sinal de sondagem e dispara alerta.
+**RN-403** — Única exceção ao `200`: assinatura inválida, que retorna `401` e é gravada com `assinatura_valida = false`. Volume anormal desses registros é sinal de sondagem e dispara alerta.
 
 ### 2.1 Validação de assinatura
 
@@ -64,9 +64,9 @@ id:{data.id};request-id:{x-request-id};ts:{ts};
 
 HMAC-SHA256 com o secret do webhook da central, comparado com `v1` **em tempo constante** (`crypto.timingSafeEqual`).
 
-**RN-404 [NOVA]** — Evento com `ts` mais de 5 minutos no passado é rejeitado, para limitar replay. A janela é configurável.
+**RN-404** — Evento com `ts` mais de 5 minutos no passado é rejeitado, para limitar replay. A janela é configurável.
 
-**RN-405 [NOVA]** — O secret usado na validação é o da conexão de gateway do inquilino identificado pelo slug da rota. Se a denominação tiver conexão por central (decisão em aberto nº 2 do PRD), a rota ganha um segundo segmento: `/api/webhooks/mercadopago/:inquilinoSlug/:centralSlug`. A modelagem de `conexao_gateway` suporta as duas formas sem migration.
+**RN-405** — O secret usado na validação é o da conexão de gateway do inquilino identificado pelo slug da rota. Central com conexão própria (§11, decisão nº 2 do PRD, fechada — inquilino por padrão, override livre por central) usa a rota com um segundo segmento: `/api/webhooks/mercadopago/:inquilinoSlug/:centralSlug`; central sem conexão própria usa só `:inquilinoSlug`, resolvendo pelo fallback da RN-105. A modelagem de `conexao_gateway` já suporta as duas formas sem migration — não é uma hipótese em aberto, é o formato definitivo.
 
 ---
 
@@ -88,7 +88,7 @@ A aplicação é uma transição, não um `update`. Se a cobrança já está `pa
 
 `notificacao_chave_unica` (RN-136). Se as duas camadas anteriores falharem por algum caminho não previsto, a pessoa ainda assim não recebe dois e-mails.
 
-**RN-406 [NOVA]** — Aplicação do evento roda em transação única, com `select ... for update` na `cobranca`. Duas entregas simultâneas do mesmo evento serializam; a segunda encontra o estado já alterado e vira `sem_efeito`.
+**RN-406** — Aplicação do evento roda em transação única, com `select ... for update` na `cobranca`. Duas entregas simultâneas do mesmo evento serializam; a segunda encontra o estado já alterado e vira `sem_efeito`.
 
 ---
 
@@ -98,9 +98,9 @@ Cenário real: `approved` processado às 10:00:03, `pending` (emitido às 10:00:
 
 Duas defesas combinadas:
 
-**RN-407 [NOVA]** — Toda aplicação compara `date_last_updated` da resposta do gateway com `cobranca.atualizado_em_gateway`. Se for menor ou igual, descarta com `resultado = 'evento_antigo'`.
+**RN-407** — Toda aplicação compara `date_last_updated` da resposta do gateway com `cobranca.atualizado_em_gateway`. Se for menor ou igual, descarta com `resultado = 'evento_antigo'`.
 
-**RN-408 [NOVA]** — Independentemente do carimbo, a máquina de estados não permite regressão a partir de estado terminal de recebimento (RN-301). `paga → aguardando_pagamento` não existe, então o evento atrasado não tem para onde levar.
+**RN-408** — Independentemente do carimbo, a máquina de estados não permite regressão a partir de estado terminal de recebimento (RN-301). `paga → aguardando_pagamento` não existe, então o evento atrasado não tem para onde levar.
 
 As duas juntas porque `date_last_updated` pode empatar em eventos muito próximos, e nesse caso é a máquina de estados que segura.
 
@@ -122,22 +122,23 @@ As duas juntas porque `date_last_updated` pode empatar em eventos muito próximo
 9. Transição válida? senão → 'sem_efeito'
 10. update cobranca
 11. Se situacao = 'paga': InscricaoService.transicionar(confirmada)  (RN-032)
-12. Se situacao ∈ (estornada, estornada_parcial): trata reembolso
-13. insert notificacao (chave única)              (RN-136)
+12. Se situacao ∈ (estornada, estornada_parcial): é estorno que **nós pedimos** (RN-062) — fecha o pedido em `estorno_situacao = concluido` e acumula `estorno_valor` e `taxa_estornada` (RN-063, RN-097)
+12a. Se o evento é `charged_back` (contestação): **não** passa pelo passo 12 — grava `contestacao_situacao` (`aberta`, `perdida` ou `revertida`) e a tarifa de contestação em `estorno_tarifa_gateway`, nunca `situacao = estornada` (RN-064, RN-300); reversão desfaz a `taxa_estornada` correspondente e fecha a pendência, perda a mantém aberta
+13. insert notificacao (chave única)              (RN-136) — é o webhook, e só ele, que dispara "reembolso efetivado" quando `estorno_situacao` vira `concluido` (RN-063); o aceite síncrono do estorno não dispara essa notificação
 14. insert auditoria (ator = 'webhook')
 15. update webhook_evento (processado_em, resultado)
 16. COMMIT
 ```
 
-**RN-409 [NOVA]** — Pagamento sem cobrança correspondente é gravado como `orfao` e alerta a coordenação. Nunca é descartado: quase sempre é pagamento legítimo cuja cobrança falhou em ser persistida, ou notificação de outra aplicação usando a mesma conta. Dinheiro entrou e ninguém sabe de quem é — é caso para humano.
+**RN-409** — Pagamento sem cobrança correspondente é gravado como `orfao` e alerta a coordenação. Nunca é descartado: quase sempre é pagamento legítimo cuja cobrança falhou em ser persistida, ou notificação de outra aplicação usando a mesma conta. Dinheiro entrou e ninguém sabe de quem é — é caso para humano.
 
-**RN-410 [NOVA]** — `external_reference` enviado ao criar o pagamento é `{inscricao_id}:{cobranca_id}`, o que permite recuperar o vínculo mesmo se o `gateway_pagamento_id` não tiver sido gravado por causa de um timeout.
+**RN-410** — `external_reference` enviado ao criar o pagamento é `{inscricao_id}:{cobranca_id}`, o que permite recuperar o vínculo mesmo se o `gateway_pagamento_id` não tiver sido gravado por causa de um timeout.
 
-**RN-411 [NOVA]** — Passo 11 usa **o mesmo** `InscricaoService.transicionar` do fluxo normal (RN-200). O webhook não tem caminho privilegiado para mudar situação de inscrição. É o que garante que auditoria, notificação e validação aconteçam igual, venha de onde vier.
+**RN-411** — Passo 11 usa **o mesmo** `InscricaoService.transicionar` do fluxo normal (RN-200). O webhook não tem caminho privilegiado para mudar situação de inscrição. É o que garante que auditoria, notificação e validação aconteçam igual, venha de onde vier.
 
-**RN-412 [NOVA]** — Falha no processamento incrementa `tentativas` e reagenda com backoff exponencial (1min, 5min, 15min, 1h, 6h). Acima de 5 tentativas, alerta. O evento bruto continua guardado — reprocessável a qualquer momento.
+**RN-412** — Falha no processamento incrementa `tentativas` e reagenda com backoff exponencial (1min, 5min, 15min, 1h, 6h). Acima de 5 tentativas, alerta. O evento bruto continua guardado — reprocessável a qualquer momento.
 
-**RN-413 [NOVA]** — Se a cobrança está `paga` mas a inscrição já foi `cancelada` (a pessoa cancelou e pagou o QR code antigo depois), a inscrição **não** é reaberta. Gera pendência de reembolso para a coordenação. É um caso que acontece de verdade e que resolvido automaticamente vira confusão maior.
+**RN-413** — Se a cobrança está `paga` mas a inscrição já foi `cancelada` (a pessoa cancelou e pagou o QR code antigo depois), a inscrição **não** é reaberta. Gera pendência de reembolso para a coordenação. É um caso que acontece de verdade e que resolvido automaticamente vira confusão maior.
 
 ---
 
@@ -151,9 +152,9 @@ Rotina a cada 30 minutos:
 2. `cobranca` em `criada` há mais de 15 minutos sem `gateway_pagamento_id` (RN-144) → busca no gateway por `external_reference` e pela `idempotency_key`. Achou → vincula. Não achou → marca `recusada` e libera para nova tentativa.
 3. Diário: para cada encontro em atividade, compara a soma do que consta como pago no nosso banco com o relatório do gateway no período. Divergência vira alerta.
 
-**RN-414 [NOVA]** — A reconciliação usa exatamente o mesmo serviço de aplicação do webhook. Duas implementações do "aplicar pagamento" divergem em semanas e produzem estados diferentes conforme o caminho.
+**RN-414** — A reconciliação usa exatamente o mesmo serviço de aplicação do webhook. Duas implementações do "aplicar pagamento" divergem em semanas e produzem estados diferentes conforme o caminho.
 
-**RN-415 [NOVA]** — O passo 2 é o que fecha o buraco do pagamento duplicado: uma cobrança órfã em `criada` que na verdade existe no gateway é encontrada e vinculada antes que o usuário gere outra.
+**RN-415** — O passo 2 é o que fecha o buraco do pagamento duplicado: uma cobrança órfã em `criada` que na verdade existe no gateway é encontrada e vinculada antes que o usuário gere outra.
 
 ---
 
@@ -170,7 +171,7 @@ Métricas mínimas:
 | Divergência de conciliação | qualquer valor diferente de zero |
 | Latência do endpoint | p95 acima de 500ms |
 
-**RN-416 [NOVA]** — Log de webhook registra `notificacao_id`, `recurso_id`, `resultado` e duração. Nunca corpo completo com dado de pagador (RN-319). O corpo bruto está no banco, com acesso restrito — é lá que se investiga.
+**RN-416** — Log de webhook registra `notificacao_id`, `recurso_id`, `resultado` e duração. Nunca corpo completo com dado de pagador (RN-319). O corpo bruto está no banco, com acesso restrito — é lá que se investiga.
 
 ---
 
@@ -190,8 +191,8 @@ Cenários obrigatórios, todos com o gateway mockado:
 10. Duas entregas concorrentes do mesmo evento → serializadas pelo `for update`.
 11. Reconciliação encontra pagamento cuja notificação nunca chegou.
 12. Cobrança órfã em `criada` é vinculada pela `idempotency_key` (RN-415).
-13. Webhook de estorno leva a `estornada` e efetiva o reembolso (RN-317).
-14. `charged_back` gera pendência sem alterar a inscrição (RN-300).
+13. Webhook de estorno leva a `estornada`, fecha o pedido em `concluido` e só aí dispara "reembolso efetivado" (RN-063) — distinto do aceite síncrono, que não dispara essa notificação.
+14. `charged_back` grava `contestacao_situacao = aberta` sem alterar `situacao` nem a inscrição (RN-064); reversão desfaz `taxa_estornada` e fecha a pendência, perda a mantém aberta.
 15. Evento assinado com o secret do inquilino A entregue na rota do inquilino B → `401`, nada aplicado (RN-417).
 16. Cobrança cujo inquilino diverge do slug da rota → `inconsistente`, sem aplicação, com alerta (RN-418).
-17. Estorno atualiza `taxa_estornada` proporcionalmente (RN-328).
+17. Estorno atualiza `taxa_estornada` proporcionalmente (RN-097).

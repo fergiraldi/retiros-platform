@@ -237,14 +237,26 @@ Formato: `Dado / Quando / Então`. Cada cenário vira ao menos um teste automati
 
 ## CA-20 — Cancelamento com reembolso integral
 
-> Regras: RN-060, RN-205, RN-208, RN-317
+> Regras: RN-060, RN-062, RN-063
 
 **Dado** João confirmado, com o encontro a 20 dias
 **Quando** ele cancela
 **Então** o reembolso é 100% do valor pago
-**E** a inscrição só passa a `cancelada` depois de o gateway aceitar o estorno
+**E** a inscrição só passa a `cancelada` depois de o gateway **aceitar** o estorno
 **E** a vaga é liberada e a fila promovida
 **E** o reembolso só consta como efetivado quando o webhook de estorno chegar
+
+---
+
+## CA-20a — Estorno aceito sem confirmação
+
+> Regras: RN-063
+
+**Dado** João cancelado, com o estorno aceito pelo gateway (`estorno_situacao = solicitado`)
+**Quando** passam 7 dias sem o webhook de confirmação chegar
+**Então** o caso vira pendência para a coordenação, com pessoa, valor e data do pedido
+**E** a inscrição continua `cancelada`
+**E** se o estorno depois for recusado ou revertido, a mesma pendência permanece até a devolução zerar
 
 ---
 
@@ -262,7 +274,7 @@ Formato: `Dado / Quando / Então`. Cada cenário vira ao menos um teste automati
 
 ## CA-22 — Falha no estorno não cancela a inscrição
 
-> Regras: RN-208, RN-316
+> Regras: RN-062, RN-316
 
 **Dado** João pedindo cancelamento com direito a reembolso
 **Quando** o estorno falha no gateway
@@ -539,7 +551,7 @@ Formato: `Dado / Quando / Então`. Cada cenário vira ao menos um teste automati
 | Pagamento | CA-06 a CA-09, CA-29 |
 | Webhook | CA-10 a CA-14 |
 | Lista de espera | CA-15 a CA-19 |
-| Cancelamento | CA-20 a CA-23 |
+| Cancelamento | CA-20, CA-20a, CA-21 a CA-23 |
 | **Multi-inquilino** | **CA-24a a CA-24e, CA-33, CA-34, CA-37** |
 | Isolamento e LGPD | CA-24, CA-25, CA-26, CA-24d |
 | Plataforma e faturamento | CA-35, CA-36 |
@@ -547,7 +559,7 @@ Formato: `Dado / Quando / Então`. Cada cenário vira ao menos um teste automati
 
 **Critério de pronto da Fase 1:**
 
-1. Os 40 cenários automatizados e passando.
+1. Os 41 cenários automatizados e passando.
 2. O teste de varredura de isolamento (RN-141) no CI, falhando o build se qualquer tabela de domínio vazar entre inquilinos ou ficar sem RLS.
 3. CA-15 executado com concorrência real contra Postgres, não com mock.
 4. CA-24b executado com pool de conexões real, não com conexão dedicada por teste — é o único jeito de pegar o vazamento de contexto da RN-053t.

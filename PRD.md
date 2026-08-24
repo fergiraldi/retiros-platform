@@ -8,13 +8,17 @@ Documento de produto para geração de specs. Escrito para ser lido por humano e
 
 | | |
 |---|---|
-| **Versão** | 1.6 |
+| **Versão** | 1.8 |
 | **Dono** | Fernando Giraldi |
 | **Última alteração** | 2026-08-24 |
 | **Situação** | Em definição — fase de fechamento das specs (`specs/`) |
 | **Downstream** | `specs/fase-1/` deriva deste documento e cita seus `RN-xxx` |
 
 ### 0.1 Changelog
+
+**1.8 — 2026-08-24** — Fecha as três decisões de §11 que ainda restavam sem ser a nº 1: **nº 2** (conta de recebimento) — as duas coexistem, inquilino por padrão com override livre por central, trocável a qualquer momento; **nº 5** (layout do crachá) — por central, herdado por cópia do padrão do inquilino (mesmo mecanismo da RN-103); **nº 6** (exportação de saída do inquilino) — formato fechado em CSV, um arquivo por entidade, prazo continua em aberto só como cláusula de contrato, sem bloquear nada. A Fase 1 fica **sem nenhuma decisão bloqueante em aberto**.
+
+**1.7 — 2026-08-24** — Fecha a **decisão nº 4** de §11 (ficha configurável): schema continua fixo, com campo opcional ligável por inquilino e um bloco limitado de campos extras (`label`/`valor` livre) para cobrir encontro segmentado, sem motor de formulário. Entra **RN-116** (faixa de extensão, §0.2), em §4.5, com o bloco. A Fase 1 passa a ter **uma** decisão bloqueante em aberto (nº 2), não mais duas.
 
 **1.6 — 2026-08-24** — **§11 deixa de ser lista de dúvidas e passa a registro de decisões**: cada item ganha identificador estável, decisão a tomar, impacto concreto (regras, entidades e telas), quem decide e a fase que bloqueia — sem essa lista, "decisão em aberto" não dizia o que fazer com ela.
 
@@ -35,7 +39,7 @@ Documento de produto para geração de specs. Escrito para ser lido por humano e
 **1.4 — 2026-08-24** — fechamento do **que as regras já existentes pressupunham e o documento não modelava**. Diferente da 1.2 e da 1.3, quase nada aqui é decisão financeira nova: são as entidades que as regras citam sem definir, os campos das regras que dizem "configurável", a separação de dado sensível que a RN-091 exige, e os três fluxos que §5 não tinha — acesso, direitos do titular e reconhecimento por CPF. O rastreamento está em §12.
 
 - **Entidades novas** — §4.12 a §4.20: **conexão de recebimento** (RN-104, RN-105), que existia como o campo opaco `config_pagamento` de §4.1; **termo do inquilino** versionado (RN-090a), que a RN-090 citava e ninguém publicava — sem ele a Fase 1 não conseguia criar inscrição; **consentimento** (RN-090b), inclusive o **consentimento de retenção** que a RN-093 citava e que não existia em mais lugar nenhum do documento (RN-093a); **conta de acesso** (RN-017 a RN-019); **concessão de acesso de suporte** (RN-005a), que a RN-005 exigia; **auditoria** (RN-106), que a RNF-005 exigia; **notificação** (RN-107), que §7 exigia; **evento de webhook bruto** (RN-053), que a RNF-004 exigia; e **modelo de cronograma** (RN-048a), que a RN-048 citava.
-- **§4.3a (nova)** — **o dado sensível sai de `Pessoa`** e vira entidade própria, com visibilidade declarada campo a campo e leitura auditada (RN-091a). Fica decidido o que o PRD calava e `specs/fase-1/00-multi-inquilino.md` tinha decidido sozinho: o acesso de suporte da RN-005 **não** alcança esses campos, com ou sem concessão — e o CPF também não, porque ele não está ali.
+- **§4.3a** — **o dado sensível sai de `Pessoa`** e vira entidade própria, com visibilidade declarada campo a campo e leitura auditada (RN-091a). Fica decidido o que o PRD calava e `specs/fase-1/00-multi-inquilino.md` tinha decidido sozinho: o acesso de suporte da RN-005 **não** alcança esses campos, com ou sem concessão — e o CPF também não, porque ele não está ali.
 - **Campos das regras "configuráveis"** — §4.0 e §4.1 ganham os valores que RN-040, RN-049 e RN-060 mandavam configurar e que não existiam em campo nenhum. **RN-103** declara o que é do inquilino, o que é da central e que a herança é **cópia na criação**, nunca referência viva, com um ato explícito e auditado para propagar mudança às centrais que já existem. **RN-065** fixa a forma das faixas de reembolso, suas invariantes e o congelamento delas na inscrição — o mesmo princípio da RN-038; **RN-040a** e **RN-049a** fazem o mesmo por parcelamento e comprovante de despesa, e decidem o que é lido no ato em vez de congelado.
 - **RN-024** — `slug` do encontro como identificador da URL pública, que o SSR de §8 pressupõe: sugerido na criação, imutável a partir de `publicado`, e uuid fora da área pública. **RN-025** — `coordenador_inscricao_id` no encontro, na mesma forma da RN-046, que é o que torna executável o papel "coordenador do encontro" de §3.
 - **RN-039** — **convidador que não está na base**: `convidador_nome` ao lado de `convidador_pessoa_id`, com a decisão de que a ficha pública não vincula sozinha e de que a RN-045 só agrupa pelo ponteiro. Era o último id livre do bloco de Inscrição.
@@ -44,16 +48,16 @@ Documento de produto para geração de specs. Escrito para ser lido por humano e
 
 **1.3 — 2026-08-23** — fechamento do **núcleo financeiro da Fase 1**: quem paga cada custo do meio de pagamento, o que exatamente o inscrito vê como preço, sobre o que incide o reembolso e em que ordem o dinheiro e a vaga se movem. Como na 1.2, **há decisão de negócio nova** — as specs de cobrança tinham decidido sozinhas, e duas delas pediam confirmação explícita por escrito. O rastreamento está em §12.
 
-- **RN-101** (nova) — **custo do meio de pagamento**: a tarifa do gateway (MDR) é sempre da central e nunca é acrescentada ao que o inscrito paga; o juro do parcelamento é sempre do comprador e não entra no `valor` da cobrança nem no `valor_devido`. RN-040 passa a citá-la.
+- **RN-101** — **custo do meio de pagamento**: a tarifa do gateway (MDR) é sempre da central e nunca é acrescentada ao que o inscrito paga; o juro do parcelamento é sempre do comprador e não entra no `valor` da cobrança nem no `valor_devido`. RN-040 passa a citá-la.
 - **RN-096** — reescrita: como o repasse da taxa da plataforma **aparece no preço**. `valor_devido` guarda a taxa do encontro, `valor` da cobrança guarda o total, o percentual incide sobre a taxa do encontro que a cobrança cobra — o `valor_devido` na cobrança comum, só a diferença na cobrança de complemento da RN-037, e as duas parcelas são discriminadas na página do encontro, na ficha, no e-mail e na consulta por token. A escolha do repasse e o percentual são congelados na inscrição (§4.5), não relidos do inquilino na criação da cobrança.
 - **RN-060** — base de cálculo do reembolso fechada nas duas pontas: incide sobre o que o inscrito pagou **à central**, o que **inclui** a taxa repassada (RN-096) e **exclui** o juro do parcelamento (RN-101).
-- **RN-062** (nova) — **ordem das operações do cancelamento**: cobrança viva cancelada primeiro, estorno aceito antes de a inscrição virar `cancelada`, e o que acontece quando o estorno falha. A garantia que a spec teve de inventar em `RN-208` passa a ter origem aqui.
-- **RN-063** (nova) — **quando o reembolso está efetivado**: o aceite síncrono libera o cancelamento, o webhook fecha o reembolso, e estorno aceito que não confirma em 7 dias vira pendência.
-- **RN-064** (nova) — **contestação de cartão**: em que difere do estorno comum, o que acontece com a vaga e onde ela fica registrada.
+- **RN-062** — **ordem das operações do cancelamento**: cobrança viva cancelada primeiro, estorno aceito antes de a inscrição virar `cancelada`, e o que acontece quando o estorno falha. A garantia que a spec teve de inventar em `RN-208` passa a ter origem aqui.
+- **RN-063** — **quando o reembolso está efetivado**: o aceite síncrono libera o cancelamento, o webhook fecha o reembolso, e estorno aceito que não confirma em 7 dias vira pendência.
+- **RN-064** — **contestação de cartão**: em que difere do estorno comum, o que acontece com a vaga e onde ela fica registrada.
 - **RN-097** — reescrita: a taxa da plataforma volta proporcionalmente também na contestação, e volta para a plataforma quando a contestação é revertida.
 - **RN-098** — reescrita: o que a área pública faz quando o recebimento está indisponível — agenda no ar, vaga reservada, cobrança pendente de emissão e relógio parado.
 - **RN-052** — terceira exceção: o prazo não corre enquanto a plataforma não conseguiu emitir a cobrança (RN-098).
-- **RN-102** (nova) — a taxa apurada é **relatório para faturamento externo**, não movimento financeiro: o dinheiro já foi retido no split, e emitir nota não é objetivo do produto (§1).
+- **RN-102** — a taxa apurada é **relatório para faturamento externo**, não movimento financeiro: o dinheiro já foi retido no split, e emitir nota não é objetivo do produto (§1).
 - §4.6 — campos `contestacao_*` e `taxa_estornada`; a distinção entre `valor` e `valor_devido` que a RN-096 passou a exigir; a situação de cobrança `pendente_emissao` (RN-098); a semântica de acumulador dos campos de estorno; e as pendências financeiras derivadas passam de três a **cinco** (RN-062, RN-063, RN-098). F3 reescrito na ordem da RN-062.
 - §11 — a decisão em aberto nº 2 (recebimento por inquilino ou por central) passa a **bloqueante da Fase 1**, com a lista de impacto; §10 registra o bloqueio.
 - §7 — notificações de reembolso efetivado, estorno sem confirmação, contestação recebida e vaga reservada sem cobrança emitida.
@@ -62,32 +66,32 @@ Documento de produto para geração de specs. Escrito para ser lido por humano e
 
 - **RN-030** — reescrita como **tabela de transições**, com origem, destino, gatilho e quem executa. `lista_espera` passa a ser estado de **entrada**, não "ramo"; entram a regressão `pendente_pagamento → lista_espera` (RN-052), o `confirmada → cancelada` de F3 e o gatilho de `ausente`; `presente` e `ausente` ficam marcados como Fase 2.
 - **RN-033** — reescrita: declara **quais situações ocupam vaga**, o **prazo do promovido** (48h/24h/6h conforme a proximidade do encontro) e o que acontece quando ele estoura.
-- **RN-023** (nova) — `inscricoes_abrem_em`/`inscricoes_fecham_em` são a fonte de verdade da janela de inscrição, em **dois predicados** distintos (janela aberta; aceitação de inscrição nova, que soma o inquilino `ativo`); `inscricoes_encerradas` (RN-021) passa a ser situação **derivada** do carimbo, não um segundo interruptor — derivação limitada ao par `publicado` ↔ `inscricoes_encerradas`.
+- **RN-023** — `inscricoes_abrem_em`/`inscricoes_fecham_em` são a fonte de verdade da janela de inscrição, em **dois predicados** distintos (janela aberta; aceitação de inscrição nova, que soma o inquilino `ativo`); `inscricoes_encerradas` (RN-021) passa a ser situação **derivada** do carimbo, não um segundo interruptor — derivação limitada ao par `publicado` ↔ `inscricoes_encerradas`.
 - **RN-035** — reescrita: a criação administrativa de inscrição é **dispensada da janela**, com papel mínimo, justificativa, auditoria e a regra de excedente da RN-036. É o caminho do substituto de última hora que não está na fila.
-- **RN-036** (nova) — promoção manual fora de ordem pela coordenação, com justificativa e auditoria, e o desfecho do prazo estourado depois do fechamento das inscrições.
-- **RN-037** (nova) — destino da inscrição `confirmada` cujo pagamento é estornado ou contestado, inclusive estorno **parcial**, contestação revertida e segundo pagamento recebido. RN-070 alinhada.
-- **RN-038** (nova) — `valor_devido` congelado na inscrição: reajuste de taxa não altera dívida de quem já se inscreveu.
+- **RN-036** — promoção manual fora de ordem pela coordenação, com justificativa e auditoria, e o desfecho do prazo estourado depois do fechamento das inscrições.
+- **RN-037** — destino da inscrição `confirmada` cujo pagamento é estornado ou contestado, inclusive estorno **parcial**, contestação revertida e segundo pagamento recebido. RN-070 alinhada.
+- **RN-038** — `valor_devido` congelado na inscrição: reajuste de taxa não altera dívida de quem já se inscreveu.
 - **RN-041** — reescrita: **marco de corte do pagamento online** (`data_inicio`, independente de `inscricoes_fecham_em`), até quando o Pix pode ser regerado, limite de regerações e o mesmo marco valendo para cartão.
 - **RN-052** — reescrita: as 72h contam da **inscrição**, não da cobrança; exceção para pagamento em análise antifraude; nada expira sozinho depois de fechadas as inscrições.
 - **RN-060** — quem absorve a tarifa do gateway no reembolso, onde ela fica gravada (`estorno_tarifa_gateway`, na cobrança) e em que fase vira lançamento.
-- **RN-061** (nova), **RN-021** e §4.4 — **cancelamento do encontro**: o que acontece com as inscrições e com o dinheiro já pago, inclusive o presencial. F3 deixa de cobrir só a desistência do inscrito.
+- **RN-061**, **RN-021** e §4.4 — **cancelamento do encontro**: o que acontece com as inscrições e com o dinheiro já pago, inclusive o presencial. F3 deixa de cobrir só a desistência do inscrito.
 - §4.4, §4.5, §4.6 e §4.11 — campos e categorias que as regras acima passaram a exigir: `motivo_cancelamento` no encontro; `posicao_espera`, `espera_promovida_em` e `espera_expira_em` na inscrição, com o tempo de vida de cada um; `estorno_*` e `devolucao_presencial_*` na cobrança, de onde as três pendências financeiras são **derivadas** e de onde sai a despesa de tarifa; categoria de despesa `meio de pagamento`, lançada na Fase 3 a partir do `estorno_tarifa_gateway` gravado na Fase 1 (§10).
 - §7 e §6 — notificações de encontro cancelado, de fila encerrada sem vaga e de pendência financeira; relatório de pendências financeiras do encontro.
-- §12 (nova) — rastreabilidade: quais regras `[NOVA]` da spec deixam de ser invenção, e quais mudam.
+- §12 — rastreabilidade: quais regras `[NOVA]` da spec deixam de ser invenção, e quais mudam.
 
 **1.1 — 2026-08-23** — convenções de documento (§0) e correção das contradições internas do PRD, **sem mudança de decisão de negócio**:
 
-- §2, §4.2, §4.3, RN-003, RN-011 e RN-094 — `data_nascimento` confirmada na identidade global e refletida em todos os pontos que descreviam a identidade como "CPF e nome"; RN-011a (nova) fixa nome e nascimento no primeiro cadastro.
+- §2, §4.2, §4.3, RN-003, RN-011 e RN-094 — `data_nascimento` confirmada na identidade global e refletida em todos os pontos que descreviam a identidade como "CPF e nome"; RN-011a fixa nome e nascimento no primeiro cadastro.
 - RN-001 — reescrita: declara a única travessia legítima da fronteira do inquilino (RN-010, RN-099), que a spec tinha aberto por conta própria em `RN-142`.
 - RN-094 — reescrita: CPF e nome **são** dado pessoal; o que a regra garante é inacessibilidade de um inquilino a outro.
 - §4.4 — removido o booleano `publicado`, redundante com `situacao` (RN-021, RN-022).
 - RN-021 — transição de reabertura de `encerrado`, que RN-080 já pressupunha.
-- §4.6, RN-040, RN-032, RN-051 e RN-070 — métodos presenciais (`dinheiro`, `pix_presencial`) e RN-044 (nova), a baixa manual.
+- §4.6, RN-040, RN-032, RN-051 e RN-070 — métodos presenciais (`dinheiro`, `pix_presencial`) e RN-044, a baixa manual.
 - §4.7 a §4.11 — `inquilino_id` e `central_id` acrescentados, como RNF-001 já exigia; RNF-001 passa a declarar suas exceções.
 - RN-045 — critério de núcleo familiar tornado executável por `nucleo_familiar_id` (§4.3).
 - RN-046 — vice-coordenador modelado em §4.8; "exatamente um coordenador" virou invariante da publicação da equipe, não da criação da área. RN-046 passa a declarar `coordenador_inscricao_id` e `vice_coordenador_inscricao_id` como única fonte de verdade da coordenação, com `funcao` (§4.5) derivada deles; §2, RN-034, passo 2 de F4 e §6 alinhados.
 - RN-060 — faixas de reembolso sem sobreposição nem buraco, com operador de comparação explícito.
-- §4.11 e RN-100 (nova) — o booleano `aprovada` virou `situacao`, comportando o "devolve" do passo 2 de F7.
+- §4.11 e RN-100 — o booleano `aprovada` virou `situacao`, comportando o "devolve" do passo 2 de F7.
 - §10 — "painel da central" e "painel da denominação" ficam só na Fase 3.
 - §11 — item 8: apuração da taxa da plataforma sobre pagamento presencial.
 
@@ -129,7 +133,9 @@ Depois da 1.4, os blocos livres eram: RN-026 a RN-029 (Encontro), RN-054 a RN-05
 
 A versão 1.5 numera §6 inteiro: RN-081 a RN-089 **fecham** o bloco de Prestação de contas e relatórios, que estava com folga e passa a **esgotado**; RN-108 a RN-111, na faixa de extensão, cobrem o que não coube nele. §7 usa mais três da faixa de extensão — RN-112 a RN-114 — para os três gatilhos que não tinham regra nenhuma; os demais gatilhos da tabela já citavam a regra de origem e não precisaram de id novo. O painel do encontro, citado por RN-025, RN-035, RN-036, RN-037, RN-064 e RN-098 sem nunca ter sido numerado, ganha **RN-115** — também da faixa de extensão, porque o bloco de Prestação de contas e relatórios já fechou acima.
 
-Depois da 1.5, os blocos livres são: RN-026 a RN-029 (Encontro), RN-054 a RN-059 (Pagamento e webhook), RN-066 a RN-069 (Cancelamento e reembolso), RN-071 a RN-079 (Credenciamento), e RN-116 a RN-119 na faixa de extensão. Os blocos de Plataforma, Inscrição, Cobrança, Operação do encontro, **Prestação de contas e relatórios** e LGPD/recebimento estão **esgotados**.
+Depois da 1.5, os blocos livres eram: RN-026 a RN-029 (Encontro), RN-054 a RN-059 (Pagamento e webhook), RN-066 a RN-069 (Cancelamento e reembolso), RN-071 a RN-079 (Credenciamento), e RN-116 a RN-119 na faixa de extensão. Os blocos de Plataforma, Inscrição, Cobrança, Operação do encontro, **Prestação de contas e relatórios** e LGPD/recebimento estão **esgotados**.
+
+A versão 1.7 usa **RN-116**, da faixa de extensão, para os campos extras da ficha (§4.5) — o bloco de Inscrição já estava esgotado desde a 1.4. Depois da 1.7, os blocos livres são os mesmos de cima, e RN-117 a RN-119 na faixa de extensão.
 
 **O PRD não emite id acima de RN-119.** De RN-120 para cima é território de spec.
 
@@ -239,7 +245,7 @@ A suspensão para aí, e o que ela **não** faz precisa ficar escrito, porque a 
 **RN-008** — `rotulos` é um mapa de conceito do domínio para o termo de exibição. Chaves fixas no código, valores livres por inquilino.
 
 ### 4.1 Central
-`id`, `inquilino_id`, `nome`, `cidade`, `uf`, `slug`, `logo`, `contatos`, `email_contato`, `ativa`, `parcela_minima`, `max_parcelas`, `reembolso_faixas`, `despesa_exige_comprovante_acima_de`
+`id`, `inquilino_id`, `nome`, `cidade`, `uf`, `slug`, `logo`, `contatos`, `email_contato`, `ativa`, `parcela_minima`, `max_parcelas`, `reembolso_faixas`, `despesa_exige_comprovante_acima_de`, `layout_cracha`
 
 Sai `config_pagamento`, que era um campo opaco e sem definição nenhuma no documento, e entram no lugar dele duas coisas separadas: os **valores configuráveis** acima, que as regras já mandavam configurar sem dizer onde (RN-040, RN-049, RN-060), e a **conexão de recebimento**, que não é campo de central nenhuma e virou entidade própria (§4.12). Misturar credencial de gateway com política de reembolso num único campo sem forma era o que impedia as duas de terem regra.
 
@@ -257,6 +263,7 @@ Sai `config_pagamento`, que era um campo opaco e sem definição nenhuma no docu
 | `parcela_minima`, `max_parcelas` (RN-040a) | central | **cópia na criação** | idem |
 | `despesa_exige_comprovante_acima_de` (RN-049a) | central | **cópia na criação** | idem |
 | `email_contato` (§7) | central | **cópia na criação** | admin da central; admin da denominação, com registro em auditoria (§3) |
+| Layout do crachá (§11, decisão nº 5) | central | **cópia na criação** | admin da central; admin da denominação, com registro em auditoria (§3) |
 | Modelo de cronograma (RN-048a) | inquilino e central | **cópia**, no ato de criar o modelo da central | idem |
 
 **Cópia, e não referência viva.** Referência faria a denominação mudar, num clique e sem saber, a política de reembolso de uma central que não pediu — e de encontros que já foram divulgados com a regra anterior. Com cópia, a central sai da criação com os números da denominação e passa a ser dona deles: mudar o padrão do inquilino alcança **central criada depois**, e mais ninguém. É a mesma decisão que a RN-047a já tomava para o catálogo de áreas, agora valendo para tudo que se herda.
@@ -405,11 +412,18 @@ Encontro `cancelado` ou `encerrado` **mantém** o slug e a URL, que responde diz
 - **O que o ponteiro concede** é o papel de §3 dentro **daquele** encontro, e nada fora dele. Quem entra no sistema é a conta de §4.15; o ponteiro é o que a transforma em coordenador ali (RN-017).
 
 ### 4.5 Inscrição
-`id`, `inquilino_id`, `central_id`, `encontro_id`, `pessoa_id`, `tipo` (`participante` | `servo`), `situacao`, `convidador_pessoa_id`, `convidador_nome`, `grupo_id`, `area_servicao_id`, `funcao` (`coordenador` | `vice_coordenador` | `membro`, derivada — RN-046), `valor_devido`, `taxa_plataforma_repassada`, `taxa_plataforma_percentual`, `reembolso_faixas`, `data_inscricao`, `posicao_espera`, `espera_promovida_em`, `espera_expira_em`, `data_checkin`, `token_consulta`
+`id`, `inquilino_id`, `central_id`, `encontro_id`, `pessoa_id`, `tipo` (`participante` | `servo`), `situacao`, `convidador_pessoa_id`, `convidador_nome`, `grupo_id`, `area_servicao_id`, `funcao` (`coordenador` | `vice_coordenador` | `membro`, derivada — RN-046), `valor_devido`, `taxa_plataforma_repassada`, `taxa_plataforma_percentual`, `reembolso_faixas`, `campos_extras`, `data_inscricao`, `posicao_espera`, `espera_promovida_em`, `espera_expira_em`, `data_checkin`, `token_consulta`
 
 `taxa_plataforma_repassada` e `taxa_plataforma_percentual` são a **âncora do preço**, congelada junto com `valor_devido` no ato da criação (RN-038, RN-096): guardam se o inquilino repassava a taxa da plataforma ao inscrito e qual era o percentual naquele instante. A cobrança lê os dois **daqui**, e não do inquilino (RN-043) — inclusive a cobrança emitida semanas depois, na promoção da lista de espera (RN-033) ou no restabelecimento do recebimento (RN-098). Sem eles a âncora seria a criação da cobrança, e ligar o repasse ou reajustar o percentual no meio da espera mudaria retroativamente o preço de quem já se inscreveu — exatamente o que a RN-038 impede do outro lado da conta. Como `valor_devido`, os dois só mudam por ato explícito da coordenação, com motivo e auditoria (RNF-005).
 
 `reembolso_faixas` é a terceira coisa congelada no mesmo ato: a cópia da política de reembolso da central (RN-065), de onde a RN-060 lê as faixas na hora do cancelamento. Pelo mesmo motivo dos outros dois — o que a pessoa recebe de volta é uma das condições que ela leu antes de pagar.
+
+**RN-116** — **Campos extras da ficha, sem motor de formulário.** Decisão nº 4 de §11: o schema da ficha é fixo — os campos de `Pessoa` (§4.3), `Dado sensível da pessoa` (§4.3a) e desta entidade —, e cada inquilino liga e desliga, campo a campo, quais dos já opcionais aparecem e quais são obrigatórios na ficha dele (mesmo mecanismo de `rotulos`, RN-008 — chave fixa no código, comportamento livre por inquilino). `campos_extras` é o único ponto de flexibilidade além disso: uma lista de pares `label`/`valor` em texto **livre**, sem tipo próprio, sem validação além do tamanho, e sem ordem configurável pelo inquilino além da ordem de cadastro. Cobre o encontro segmentado (casais, jovens) sem construir um formulário dinâmico.
+
+- **Onde aparece**: ficha pública (F1, passo 4), consulta por token, listagem administrativa e exportação do titular (RN-092a, F10) — sempre como bloco "informações adicionais", ao lado dos campos fixos, nunca misturado a eles.
+- **O que não é**: não é dado sensível — não entra em `Dado sensível da pessoa` (§4.3a), não tem a restrição de acesso da RN-091a e não aparece em relatório nenhum de §6. Se um inquilino usar `campos_extras` para coletar saúde ou religião, o dado fica exposto como qualquer campo comum — é limitação declarada, não lacuna: quem precisa de dado sensível de verdade usa os campos de §4.3a, que já existem.
+- **Quem define os rótulos**: admin da denominação, na configuração do inquilino — mesmo nível que define `rotulos` (RN-008) e o catálogo de áreas (RN-047a).
+- **O que fica para depois**: campo com tipo próprio (data, seleção, número), validação customizada ou reordenação livre é form builder completo, fora do escopo desta decisão — entra se e quando um inquilino em funil comercial exigir o que este bloco não cobre.
 
 Os três campos de fila só existem para quem passou por `lista_espera` — quem nunca passou tem os três vazios a vida inteira —, mas **não** são preenchidos e limpos juntos. Cada um tem seu tempo de vida, e é onde se erra:
 
@@ -687,7 +701,7 @@ Ninguém lê o token pela aplicação. Quem o usa é a chamada ao gateway, que o
 
 **RN-105** — **Escopo, quem conecta, e o que a desconexão não desfaz.**
 
-**Escopo.** `central_id` vazio é conexão do **inquilino inteiro**; preenchido, é conexão **daquela central**. A entidade comporta os dois porque a decisão em aberto nº 2 ainda não saiu (§11) — e comportar os dois é diferente de decidir: enquanto a resposta não vier, a resolução da conexão de uma cobrança procura primeiro a da central e, não achando, a do inquilino. É essa dupla que faz a Fase 1 carregar dois caminhos em tudo que toca dinheiro, e é ela que some quando a decisão sair.
+**Escopo.** `central_id` vazio é conexão do **inquilino inteiro**; preenchido, é conexão **daquela central**. A entidade comporta os dois porque a decisão nº 2 de §11 (fechada) manda comportar: o inquilino conecta por padrão, e a central com conta distinta sobrepõe com a própria, a qualquer momento — a resolução da conexão de uma cobrança procura primeiro a da central e, não achando, a do inquilino.
 
 **Quem conecta.** Admin da denominação, para a conexão do inquilino; admin da central, para a da própria central. O operador **não** conecta recebimento de ninguém, nem como cortesia de implantação: a conta é do inquilino, o OAuth é autorizado por quem é dono dela, e operador capaz de conectar é operador capaz de redirecionar o dinheiro de um retiro.
 
@@ -1354,7 +1368,7 @@ O limiar exato e o mecanismo (janela fixa, *sliding window*, captcha) são decis
 
 ### 8.3 Recebimento e split
 
-O dinheiro da inscrição **nunca passa pela conta do operador**. O inquilino (ou a central, conforme a decisão em aberto nº 2, **bloqueante da Fase 1**) conecta a própria conta Mercado Pago por OAuth; a plataforma cria o pagamento em nome dessa conta e retém sua taxa como tarifa de aplicação. A conexão é a entidade de §4.12: o que ela guarda e o que ela nunca guarda está na RN-104, e quem conecta, com que escopo e o que a desconexão não desfaz está na RN-105.
+O dinheiro da inscrição **nunca passa pela conta do operador**. O inquilino conecta a própria conta Mercado Pago por OAuth por padrão; a central com conta distinta conecta a sua, a qualquer momento, sobrepondo o padrão só para ela (§11, decisão nº 2). A plataforma cria o pagamento em nome da conta que estiver ativa para aquela cobrança, e retém sua taxa como tarifa de aplicação. A conexão é a entidade de §4.12: o que ela guarda e o que ela nunca guarda está na RN-104, e quem conecta, com que escopo e o que a desconexão não desfaz está na RN-105.
 
 **RN-095** — O percentual da taxa é definido por inquilino, no contrato, e vigora a partir da data de configuração. Cobranças já criadas mantêm o valor congelado, e **inscrições já criadas mantêm o percentual que congelaram** em `taxa_plataforma_percentual` (§4.5, RN-043, RN-096) — inclusive as que ainda não geraram cobrança.
 
@@ -1436,7 +1450,7 @@ As contas de acesso são da Fase 1 **inclusive as de papel `servo`**, e não só
 
 A área administrativa da Fase 1 são as telas de operação e configuração. A fase de cada relatório e painel está declarada regra a regra em §6, que é a autoridade sobre "o que sai em cada fase" — este parágrafo só resume o que está lá. São da **Fase 1**: RN-086 (situação financeira das inscrições), RN-087 (pendências financeiras do encontro — F3 é da Fase 1, e é ele que torna operáveis a RN-037 e a RN-061; sem a lista, a decisão que as duas regras entregam à coordenação não tem onde acontecer), RN-089 (registro de acesso de suporte), RN-108 (pedidos de exportação e exclusão) e RN-111 (painel do operador), além do **painel do encontro** (RN-115) que reúne os alertas e as pendências dessas regras numa tela só. Ficam para fases seguintes RN-081 a RN-084 (**Fase 2** — dependem de Grupo e Área de servição, só existentes a partir de F4) e RN-088, RN-109 e RN-110 (**Fase 3** — prestação de contas e painéis de indicadores da central e da denominação).
 
-**A Fase 1 tem duas decisões bloqueantes em aberto**, ambas em §11. A **nº 2** — recebimento por inquilino ou por central — não impede especificar o resto da fase, e impede **começar F0**: é ela que define de quem é a tela de conexão OAuth do passo 3, a que conta a apuração da taxa se refere (RN-102) e como o webhook é roteado. A spec já está pagando por essa ausência, carregando dois caminhos onde deveria ter um. A **nº 4** — ficha de inscrição configurável por inquilino ou fixa com campos opcionais — impede **começar F1**: define o contrato de §4.5 e da ficha pública, a entrega central da fase.
+**A Fase 1 não tem mais nenhuma decisão bloqueante em aberto.** A **nº 2** — recebimento por inquilino ou por central — está **fechada**: as duas coexistem, conexão por inquilino como padrão e override livre por central, trocável a qualquer momento (§11, decisão nº 2). A **nº 4** — ficha de inscrição configurável por inquilino ou fixa com campos opcionais — também está **fechada**: schema fixo, com campos opcionais ligáveis por inquilino e um bloco limitado de campos extras (§11, decisão nº 4). F0 e F1 podem começar.
 
 A **despesa não é exceção nenhuma**: o lançamento automático da categoria `meio de pagamento` (§4.11, RN-060) só começa na Fase 3, com F7, porque é lá que a entidade Despesa e a prestação de contas existem. O que a Fase 1 faz no ato do estorno é gravar a tarifa retida em `estorno_tarifa_gateway`, na **cobrança** (§4.6), que é entidade desta fase; a Fase 3 varre esse campo ao montar a prestação de contas e lança de lá o que a central absorveu. É o mesmo motivo do relatório acima às avessas: ali a Fase 1 precisava da tela porque a decisão é dela; aqui basta o dado, porque a decisão — e o lançamento — é da Fase 3.
 
@@ -1458,42 +1472,41 @@ Cada item é uma decisão de produto, não uma dúvida solta. Tem **identificado
    - **Quem decide:** dono do produto, com o comercial (o custo do provedor entra no contrato).
    - **Bloqueia:** nenhuma fase da Fase 1. Precisa sair antes do início da Fase 2 ou da Fase 3 — o que vier primeiro —, que é quando o canal deixa de ser link manual (§7).
 
-2. **[BLOQUEANTE DA FASE 1] A conta de recebimento é do inquilino ou da central?**
-   - **Decisão a tomar:** a conexão com o gateway de pagamento é por inquilino ou por central? Denominação com centrais em CNPJs distintos precisa de conexão por central; denominação centralizada prefere uma só. A modelagem prevista suporta as duas — e é por isso que a pergunta atravessou três versões do documento sem incomodar ninguém —, mas ela não é pergunta de modelagem: é de produto, e três entregas da Fase 1 estão paradas em cima dela.
-   - **Impacto:**
+2. **[FECHADA] A conta de recebimento é do inquilino ou da central?**
+   - **Decisão registrada:** as duas ao mesmo tempo, sem exigir escolha única — a modelagem que atravessou três versões do documento sem decisão de produto era, na verdade, a resposta certa. A conexão nasce no nível do **inquilino** por padrão (`central_id` nulo, §4.12): é ela que o onboarding cria (F0, passo 3), e é nela que toda central sem conexão própria cai por fallback (RN-105). Central com conta distinta — CNPJ próprio, ou qualquer outro motivo administrativo — **conecta a sua**, sobrepondo o padrão só para ela. **O admin da central pode trocar a conexão a qualquer momento**: conectar a própria, voltar a usar a do inquilino, ou trocar por outra — sem aprovação de ninguém acima e sem período de carência. É o mesmo evento de reconexão que a RN-105 já trata como rotina: a conexão anterior fica `ativa = false` com `desativada_em`, nunca apagada, porque cobrança emitida por ela continua viva no gateway.
+   - **Impacto:** nenhuma migração de modelo — `Conexão de recebimento` (§4.12), RN-104 e RN-105 já estavam desenhadas para isso, porque a pergunta nunca foi de modelagem, era de produto. Fecha os três pontos que ficavam parados:
 
-     | Onde bate | O que fica em aberto |
+     | Onde batia | Como fecha |
      |---|---|
-     | **Onboarding do inquilino** (F0, passo 3) | de quem é a tela de conexão OAuth e o que ela pede. Por central, a implantação deixa de ser um ato do admin da denominação e vira um por central, e a RN-015 passa a ter de decidir se o inquilino sobe `ativo` com **uma** central conectada ou só com **todas** |
-     | **Apuração da taxa da plataforma** (§8.3, RN-102) | a que conta o número apurado se refere. Por central, a apuração é por central e o faturamento do inquilino é a soma delas — e a decisão nº 8, sobre inscrição paga presencialmente, herda a mesma pergunta antes de poder ser respondida |
-     | **Roteamento do webhook** | se a rota carrega o slug do inquilino ou o par inquilino/central. `specs/fase-1/04-webhook.md` (`RN-405`) teve de deixar a rota **parametrizada**, e `03-cobranca.md` (`RN-325`) de resolver a conexão com fallback de central para inquilino, justamente porque a resposta não existe |
-     | **Conexão de recebimento** (§4.12, RN-105) | `central_id` é nullable e a resolução procura a central antes do inquilino — a entidade comporta as duas respostas, e é isso que mantém o fallback vivo. Respondida a pergunta, um dos dois lados sai: ou `central_id` deixa de existir, ou passa a ser obrigatório e o fallback some |
+     | **Onboarding do inquilino** (F0, passo 3) | conecta a conta do inquilino, como já estava escrito. Central com conta própria conecta a dela **depois**, a qualquer momento, na tela da própria central — não é passo do onboarding, não trava a ativação do inquilino |
+     | **Apuração da taxa da plataforma** (§8.3, RN-102) | continua **por inquilino e período**, como já está escrita — abrir por central é possível a qualquer momento, porque cada `cobranca` já carrega `central_id`, independente de qual conexão gerou o pagamento |
+     | **Roteamento do webhook** | a rota continua **parametrizada** (`:inquilinoSlug` ou `:inquilinoSlug/:centralSlug` — RN-405), porque as duas formas coexistem de fato na plataforma, não como hipótese à espera de resposta |
 
-     Enquanto não houver resposta, a Fase 1 carrega os dois caminhos em tudo que toca dinheiro.
    - **Quem decide:** dono do produto, com o comercial — entra no contrato do inquilino.
-   - **Bloqueia:** Fase 1, especificamente o início de **F0**: não impede especificar o resto da fase, impede **começar a construir**. Precisa sair antes de F0 entrar em desenvolvimento.
+   - **Bloqueia:** nada — **F0 pode começar**.
 
 3. **[FECHADA] Cadastro nacional de pessoa**
    - **Decisão registrada:** identidade global, cadastro por inquilino (RN-010 a RN-014, RN-094).
    - **Bloqueia:** nada — resolvida antes de a Fase 1 ser especificada.
 
-4. **[BLOQUEANTE DA FASE 1] A ficha de inscrição é configurável por inquilino ou fixa com campos opcionais?**
-   - **Decisão a tomar:** encontros mistos ou segmentados por perfil (homens, mulheres, casais, jovens) mudam a ficha de inscrição. Com multi-inquilino isso vira uma pergunta de contrato de dados: cada inquilino define seus próprios campos, ou existe um schema único que cada inquilino liga e desliga campo a campo?
-   - **Impacto:** define o contrato de §4.5 (Inscrição) e da ficha pública (F1, passo 4) — a entrega central da Fase 1. Toca RN-039 (convidador), RN-090b (preenchimento dos campos sensíveis de §4.3a), RN-010a/RN-010b (CPF) e, se a resposta for "configurável por inquilino", a tela administrativa de configuração ganha um mecanismo de campo dinâmico que hoje não existe em nenhuma entidade do documento — RN-008 (rótulos) não cobre isso, só renomeia campo fixo. A exportação do titular (RN-092a, F10) herda o formato que sair daqui.
-   - **Quem decide:** dono do produto.
-   - **Bloqueia:** Fase 1, o início de **F1** — como a decisão nº 2, não impede especificar o resto da fase, impede começar a construir a tela.
+4. **[FECHADA] A ficha de inscrição é configurável por inquilino ou fixa com campos opcionais?**
+   - **Decisão registrada:** o schema da ficha continua **fixo** — os campos de `Pessoa` (§4.3), `Dado sensível da pessoa` (§4.3a) e `Inscrição` (§4.5) já definidos no documento, sem motor de formulário dinâmico. Cada inquilino liga e desliga, campo a campo, quais dos campos já opcionais aparecem e quais são obrigatórios na ficha dele — mecanismo do mesmo formato de `rotulos` (RN-008), não uma entidade nova. Some a isso um bloco **limitado** de campos extras por inquilino — pares `label`/`valor` em texto livre, sem tipo, sem validação especial, exibidos como "informações adicionais" na ficha, na consulta por token e na exportação do titular —, para cobrir o caso de encontro segmentado (casais, jovens) sem construir um motor de formulário. Este bloco **não** entra em RLS de dado sensível (§4.3a) nem em relatório nenhum de §6: é sempre visível a quem já vê a ficha.
+   - **O que fica de fora, por ora:** campo com tipo próprio, validação customizada ou ordem livre definida pelo inquilino (form builder completo). Fica para quando (e se) um inquilino em funil comercial exigir algo que o bloco de campos extras não cobrir — construir agora sem demanda real é o custo mais caro das duas opções que a decisão original colocava lado a lado.
+   - **Impacto:** define o contrato de §4.5 (Inscrição) e da ficha pública (F1, passo 4), com **RN-116** (§4.5) formalizando o bloco de campos extras. Toca RN-039 (convidador), RN-090b (preenchimento dos campos sensíveis de §4.3a), RN-010a/RN-010b (CPF, sem mudança) e a exportação do titular (RN-092a, F10), que passa a incluir o bloco. `specs/fase-1/01-modelo-de-dados.md` e `02-inscricao.md` já refletem o campo (1.7).
+   - **Bloqueia:** nada — decisão fechada antes do início de **F1**.
 
-5. **O crachá tem layout padrão por denominação, ou cada central personaliza?**
-   - **Decisão a tomar:** layout único herdado pela denominação, ou campo próprio por central?
-   - **Impacto:** geração de PDF em lote e individual (F6, passo 1), a marca herdada por cópia na criação da central (RN-103) e RNF-007 (rótulos do inquilino em toda tela e todo PDF). Se for por central, `central` (§4.1) ganha um campo de layout que hoje não existe.
+5. **[FECHADA] O crachá tem layout padrão por denominação, ou cada central personaliza?**
+   - **Decisão registrada:** por central. `central` (§4.1) ganha campo de layout próprio, seguindo o mesmo padrão de herança da RN-103: a central herda por **cópia**, na criação, o layout padrão do inquilino, e pode sobrescrever dali em diante — mudar o padrão do inquilino não altera retroativamente central já criada, pela mesma razão que já vale para `reembolso_faixas` e `parcela_minima`.
+   - **Impacto:** geração de PDF em lote e individual (F6, passo 1), marca herdada por cópia (RN-103) e RNF-007 (rótulos em toda tela e todo PDF). Entra na tabela de configurações herdadas da RN-103 (§4.1) como mais uma linha: "layout do crachá — central, cópia na criação, admin da central altera".
    - **Quem decide:** dono do produto.
-   - **Bloqueia:** nenhuma fase da Fase 1 — crachá é **Fase 2** (§10, F6). Precisa sair antes do início de F6.
+   - **Bloqueia:** nada — crachá é **Fase 2** (§10, F6); a decisão só precisa estar fechada antes do início de F6, e já está.
 
-6. **Inquilino que sai da plataforma: formato e prazo da exportação de saída**
-   - **Decisão a tomar:** inquilino que sai da plataforma leva os dados para onde, em que formato e em que prazo? É diferente de F10 (RN-092a, RN-108), que exporta o dado de **um titular** a pedido dele — esta é a exportação de **todo o inquilino**: todas as pessoas, inscrições, cobranças e encontros dele.
-   - **Impacto:** exige uma rotina de exportação em massa que hoje não existe em fase nenhuma; toca a retenção de dados (§9) e o Supabase Storage (§8, tabela de stack). Formato e prazo não são só cláusula de contrato — o dono do produto precisa decidir a forma técnica (o mesmo par PDF + arquivo estruturado de F10, ou outro) antes de o comercial poder prometer um prazo.
-   - **Quem decide:** dono do produto, com o comercial e o jurídico — o prazo entra no contrato.
-   - **Bloqueia:** nenhuma fase da Fase 1 — só é exercitada quando um inquilino sai, o que não acontece durante o desenvolvimento. Precisa sair antes do primeiro contrato com cláusula de saída ser assinado.
+6. **[FECHADA] Inquilino que sai da plataforma: formato da exportação de saída**
+   - **Decisão registrada:** exportação em **CSV**, um arquivo por entidade (pessoas, inscrições, cobranças, encontros) do inquilino inteiro — sem dado de outro inquilino, sem a identidade global (§4.2, que não é do inquilino), no mesmo padrão de entrega de F10 (RN-092a): link temporário de validade curta, nunca anexo de e-mail. É diferente de F10 porque o escopo é o inquilino inteiro, não um titular.
+   - **O que ainda falta, e não bloqueia nada:** o **prazo** de entrega é cláusula de contrato, decidida com o comercial e o jurídico quando o primeiro contrato com cláusula de saída for negociado — não trava nenhuma fase de desenvolvimento, porque o formato técnico (CSV, um arquivo por entidade) já está definido e é o suficiente para especificar a rotina.
+   - **Impacto:** exige rotina de exportação em massa que hoje não existe em fase nenhuma; toca a retenção de dados (§9) e o Supabase Storage (§8, tabela de stack). Roteiro técnico fechado — falta só encaixar em qual fase a rotina entra (não é Fase 1: só é exercitada quando um inquilino sai, o que não acontece durante o desenvolvimento).
+   - **Quem decide:** dono do produto, com o comercial e o jurídico para o prazo.
+   - **Bloqueia:** nada — formato fechado; prazo é matéria de contrato, sem prazo próprio de spec.
 
 7. **[FECHADA] Encontro em andamento quando o inquilino é suspenso: acesso de quem opera**
    - **Respondida por RN-007 no lado público:** inquilino `suspenso` mantém a área pública em modo leitura, bloqueia inscrição nova nos dois canais (RN-023, RN-035) e não apaga nada; não congela a lista de espera, não suspende prazo nenhum (RN-033, RN-052) nem impede quitar vaga já ocupada (RN-041).
@@ -1503,9 +1516,9 @@ Cada item é uma decisão de produto, não uma dúvida solta. Tem **identificado
 
 8. **Como a taxa da plataforma é apurada sobre inscrição paga presencialmente (RN-044)?**
    - **Decisão a tomar:** dinheiro e Pix na chave da central não passam pelo split, então não há o que reter na transação. Faturar o inquilino depois, abrir mão da taxa nesses casos, ou tratar como exceção rara com limite são caminhos diferentes.
-   - **Impacto:** RN-102 (apuração da taxa, §8.3) e o relatório de faturamento externo que ela alimenta. Herda a mesma pergunta da decisão nº 2: se a conta de recebimento for por central, a apuração muda de escopo antes de esta poder ser respondida.
+   - **Impacto:** RN-102 (apuração da taxa, §8.3) e o relatório de faturamento externo que ela alimenta. Já não depende da decisão nº 2 (fechada): a apuração é por inquilino e período independente de qual conexão recebeu o pagamento — esta decisão fica isolada, só sobre o presencial.
    - **Quem decide:** dono do produto, com o comercial — entra no contrato.
-   - **Bloqueia:** nenhuma fase da Fase 1 diretamente, mas depende da decisão nº 2 sair primeiro — como ela também mexe em RN-102 e no contrato, o ideal é resolver as duas juntas antes de F0.
+   - **Bloqueia:** nenhuma fase da Fase 1 diretamente. Ideal resolver antes de F0, mas não depende mais de nenhuma outra decisão para isso.
 
 ### O que as versões anteriores já fecharam
 
@@ -1677,7 +1690,7 @@ A categoria de despesa `meio de pagamento` e seu lançamento automático (§4.11
 | `01-modelo-de-dados.md` `encontro` | ganha `coordenador_inscricao_id`, limpo quando a inscrição apontada é cancelada; `slug` passa a ter regra — sugerido na criação, editável em `rascunho`, **imutável a partir de `publicado`** | RN-024, RN-025 |
 | `01-modelo-de-dados.md` `inscricao` | `convidador_nome_livre` é renomeado para `convidador_nome`, a constraint `inscricao_convidador_exclusivo` é removida — os dois campos passam a coexistir preenchidos —, e ganha `reembolso_faixas` congelado na criação | RN-039, RN-065 |
 | `01-modelo-de-dados.md` `pessoa` | `identidade_id` passa a ser **nullable** em todos os casos que o esvaziam — a pessoa sem CPF (RN-010b), a pessoa anonimizada pelo pedido de exclusão (RN-092b) e a pessoa anonimizada por idade (RN-093) —, e nenhuma constraint pode restringir o `null` ao caso da pessoa sem CPF: a rotina de exclusão esvazia o mesmo ponteiro. `pessoa_unica_por_inquilino` deixa de alcançar essas pessoas. Entra `anonimizada_em`, que a rotina de §6 já gravava sem estar na tabela | RN-010b, RN-092b, RN-093 |
-| `01-modelo-de-dados.md` `consentimento` e tabela `termo` (nova) | o termo do inquilino passa a ser tabela, com versão, situação, finalidades e identificação do controlador e do encarregado; `consentimento` ganha `inscricao_id`, `termo_id` e `origem`, e `versao_termo` fica como **cópia** ao lado do ponteiro. O consentimento de retenção passa a ser **linha própria** de `consentimento`, com seu próprio `aceito_em` e sua própria revogação — não uma finalidade dentro da linha do consentimento obrigatório | RN-090a, RN-090b, RN-093a |
+| `01-modelo-de-dados.md` `consentimento` e a nova tabela `termo` | o termo do inquilino passa a ser tabela, com versão, situação, finalidades e identificação do controlador e do encarregado; `consentimento` ganha `inscricao_id`, `termo_id` e `origem`, e `versao_termo` fica como **cópia** ao lado do ponteiro. O consentimento de retenção passa a ser **linha própria** de `consentimento`, com seu próprio `aceito_em` e sua própria revogação — não uma finalidade dentro da linha do consentimento obrigatório | RN-090a, RN-090b, RN-093a |
 | `01-modelo-de-dados.md` `conexao_gateway` | ganha `conectada_por`, `conectada_em`, `desativada_em` e `motivo_desativacao`, com os três motivos distinguidos; a conexão substituída deixa de ser apagável | RN-104, RN-105 |
 | `01-modelo-de-dados.md` `auditoria` | ganha `ator_descricao`, `motivo` e `user_agent`, com `motivo` obrigatório na lista de atos da RN-106; `antes`/`depois` passam a excluir campo sensível e segredo | RN-106 |
 | `01-modelo-de-dados.md` `webhook_evento` | ganha o expurgo de `corpo_bruto` e `cabecalhos` aos 90 dias, mantendo o resto da linha | RN-053 |

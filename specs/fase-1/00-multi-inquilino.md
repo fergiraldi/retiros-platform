@@ -96,21 +96,23 @@ create policy inscricao_central on inscricao
 
 ## 3. Resolução do inquilino
 
-Pelo host, antes de qualquer consulta.
+Pelo host, antes de qualquer consulta. **Não existe rota administrativa neutra**: toda rota, autenticada ou não, resolve o inquilino pelo host primeiro (RNF-006) — a área administrativa de um inquilino vive no subdomínio ou domínio próprio dele, nunca numa rota como `app.com.br/admin`.
 
 ```
 homens-de-fe.app.com.br        → inquilino por subdomínio
 retiros.homensdefe.org.br      → inquilino por domínio próprio verificado
-app.com.br/admin               → inquilino pelo vínculo do usuário autenticado
+operador.app.com.br            → área do operador — não pertence a inquilino nenhum (RN-111)
 ```
+
+O terceiro host é reconhecido **antes** de aplicar o predicado de tenant, sem `inquilino_id` nenhum no contexto de transação — o operador é a única conta que vive fora de um inquilino (RN-004, RN-017).
 
 **RN-059t** — Área pública resolve o inquilino **exclusivamente** pelo host. Nunca por parâmetro de query, cabeçalho customizado ou corpo da requisição — qualquer um deles é escolhido pelo cliente e vira porta de travessia entre inquilinos.
 
-**RN-060t** — Área autenticada resolve pelo vínculo do usuário (`usuario.inquilino_id`), e valida que bate com o host. Divergência é `403` e alerta de segurança: ou é bug, ou é tentativa.
+**RN-060t (§8.1)** — Área autenticada resolve o inquilino pelo host, como qualquer rota, e **valida** o vínculo do usuário (`usuario.inquilino_id`) **contra** o host já resolvido — não resolve o inquilino a partir do vínculo. Divergência é `403` e alerta de segurança: ou é bug, ou é tentativa.
 
-**RN-061t** — Host desconhecido devolve página neutra de "endereço não encontrado", sem listar inquilinos existentes e sem revelar que a plataforma é multi-inquilino.
+**RN-061t** — Só cai na página neutra de "endereço não encontrado" o host que não bater com nenhum dos três reconhecidos — subdomínio curinga, domínio próprio verificado, ou o host do operador. A página neutra não lista inquilinos existentes e não revela que a plataforma é multi-inquilino. A lista de `Access-Control-Allow-Origin` segue os mesmos três: os dois primeiros como lista dinâmica de domínios de inquilino, o host do operador como entrada fixa própria.
 
-**RN-062t** — Domínio próprio só entra em operação depois de verificação por registro TXT no DNS. Sem isso, alguém aponta um domínio para a plataforma e serve conteúdo de terceiro na cara de outra denominação.
+**RN-062t (RNF-006)** — Domínio próprio só entra em operação depois de verificação por **CNAME (ou registro equivalente) apontado para a plataforma**. Sem isso, alguém aponta um domínio para a plataforma e serve conteúdo de terceiro na cara de outra denominação.
 
 **RN-063t** — Inquilino `suspenso`: área pública em leitura, inscrição bloqueada com mensagem orientando procurar a coordenação. Inquilino `encerrado`: host devolve o mesmo que host desconhecido. **Dado nunca é apagado por mudança de situação.**
 
@@ -244,7 +246,7 @@ Detalhado em [03-cobranca.md](03-cobranca.md#7-split-e-taxa-da-plataforma). Aqui
 
 **RN-084t** — Estorno devolve a tarifa proporcionalmente (RN-097).
 
-**RN-085t** — Inadimplência **não** derruba encontro em andamento (decisão em aberto nº 7 do PRD). Suspensão bloqueia novas inscrições e preserva a operação do que já está confirmado. Derrubar a recepção na sexta à noite destrói a relação com a denominação por uma questão que se resolve na segunda.
+**RN-085t (RN-018, RN-007)** — Inadimplência **não** derruba encontro em andamento — decisão nº 7 de §11 do PRD, **fechada**: RN-018 (§4.15, "O que não revoga conta") decide que a conta de quem opera o encontro em andamento continua ativa durante a suspensão do inquilino, confirmando de forma independente a mesma decisão desta regra. Suspensão bloqueia novas inscrições e a alteração de configuração do inquilino e das centrais, e preserva a operação do que já está confirmado — a secretaria continua dando baixa manual, a coordenação continua promovendo da fila e resolvendo pendência financeira, a recepção continua fazendo check-in. Derrubar a recepção na sexta à noite destrói a relação com a denominação por uma questão que se resolve na segunda.
 
 ---
 
