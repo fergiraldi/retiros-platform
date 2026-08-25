@@ -4,6 +4,7 @@
   "private": true,
   "description": "Plataforma multi-inquilino de gestao de retiros religiosos",
   "type": "commonjs",
+  "packageManager": "pnpm@11.21.0",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint src test",
