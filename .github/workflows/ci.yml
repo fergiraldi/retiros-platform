@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Lint (inclui a trava contra Pool/db fora de src/db e src/contexto — RN-054t)
+        run: pnpm run lint
+
+      - name: Aplica migrations no schema de CI
+        run: pnpm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_CI }}
+          DB_SCHEMA_ESPERADO: ${{ vars.DB_SCHEMA_ESPERADO || 'dev' }}
+
+      # Isolado e primeiro: é o teste mais barato e o que protege a
+      # fronteira de verdade (RN-141) — se cair, nem vale a pena rodar o
+      # resto.
+      - name: RN-141 — cobertura de RLS
+        run: pnpm run test:rls
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_CI }}
+          DB_SCHEMA_ESPERADO: ${{ vars.DB_SCHEMA_ESPERADO || 'dev' }}
+
+      # Drift check: se alguém mudou uma migration sem rodar `db:pull`
+      # depois, o schema.ts commitado diverge do banco de verdade e o CI
+      # falha aqui, antes do resto rodar contra tipos desatualizados.
+      - name: Confere que src/db/schema.ts está sincronizado com as migrations
+        run: |
+          pnpm run db:pull
+          git diff --exit-code -- src/db/schema.ts src/db/relations.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_CI }}
+          DB_SCHEMA_ESPERADO: ${{ vars.DB_SCHEMA_ESPERADO || 'dev' }}
+
+      - name: Suíte de integração completa (RLS, contexto de transação, isolamento entre inquilinos)
+        run: pnpm run test:integracao
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_CI }}
+          DB_SCHEMA_ESPERADO: ${{ vars.DB_SCHEMA_ESPERADO || 'dev' }}

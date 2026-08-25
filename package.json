@@ -1,0 +1,46 @@
+{
+  "name": "fernando-retiros",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Plataforma multi-inquilino de gestao de retiros religiosos",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint src test",
+    "start": "node dist/src/main.js",
+    "start:dev": "ts-node -T src/main.ts",
+    "db:doctor": "tsx src/db/doctor.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:pull": "drizzle-kit pull && tsx src/db/pos-processar-schema.ts",
+    "test": "jest",
+    "test:rls": "jest rls-cobertura",
+    "test:integracao": "jest --runInBand"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.1",
+    "@nestjs/core": "^11.2.1",
+    "@nestjs/platform-express": "^11.2.1",
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.2.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.23.1",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "eslint": "^10.9.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    { "idx": 0, "version": "7", "when": 1756000000000, "tag": "0000_estrutura", "breakpoints": true },
+    { "idx": 1, "version": "7", "when": 1756000000001, "tag": "0001_contexto_e_rls", "breakpoints": true },
+    { "idx": 2, "version": "7", "when": 1756000000002, "tag": "0002_funcoes_de_dominio", "breakpoints": true },
+    { "idx": 3, "version": "7", "when": 1756000000003, "tag": "0003_integridade", "breakpoints": true }
+  ]
+}
