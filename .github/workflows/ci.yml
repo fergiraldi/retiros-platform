@@ -44,13 +44,18 @@ jobs:
       # Drift check: se alguém mudou uma migration sem rodar `db:pull`
       # depois, o schema.ts commitado diverge do banco de verdade e o CI
       # falha aqui, antes do resto rodar contra tipos desatualizados.
+      #
+      # Roda contra o schema "dev" (não "ci"): é dali que o schema.ts
+      # commitado foi gerado, então é a única base de comparação válida.
+      # É introspecção pura (db:pull não escreve no banco), por isso não
+      # fere o isolamento que motivou mover as outras etapas pra "ci".
       - name: Confere que src/db/schema.ts está sincronizado com as migrations
         run: |
           pnpm run db:pull
           git diff --exit-code -- src/db/schema.ts src/db/relations.ts
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_CI }}
-          DB_SCHEMA_ESPERADO: ${{ vars.DB_SCHEMA_ESPERADO || 'dev' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+          DB_SCHEMA_ESPERADO: dev
 
       - name: Suíte de integração completa (RLS, contexto de transação, isolamento entre inquilinos)
         run: pnpm run test:integracao
