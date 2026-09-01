@@ -8,6 +8,8 @@ Cobre o ciclo completo de um encontro: publicação na agenda, inscrição de pa
 
 - [PRD.md](PRD.md) — documento de produto: glossário do domínio, atores, entidades, regras de negócio numeradas, fluxos e fases de entrega.
 - [specs/fase-1/](specs/fase-1/README.md) — especificação técnica da Fase 1: multi-inquilino, modelo de dados, inscrição, cobrança, webhook, lista de espera e critérios de aceite.
+- [docs/proximos-passos.md](docs/proximos-passos.md) — levantamento do que falta para liberar a Fase 1, em ordem de execução e com esforço em horas.
+- [docs/pendencias-tecnicas.md](docs/pendencias-tecnicas.md) — dívida técnica e itens que ficaram pra trás em cada sprint/iteração.
 
 ## Stack
 
