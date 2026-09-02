@@ -10,8 +10,8 @@ A Fase 1 está longe de liberável. O que existe hoje é só a fundação de pla
 contexto transacional por request, RLS de dois níveis, as 17 tabelas de domínio,
 funções SQL e as 3 specs de teste de banco (isolamento, cobertura de RLS, contexto de
 transação). **Fora do healthcheck `GET /saude`, não existe um único controller de
-domínio.** Zero autenticação, zero validação de payload, zero envelope de erro, zero
-integração com Mercado Pago, zero e-mail, zero cron.
+domínio.** Zero autenticação, zero validação de payload, zero integração com Mercado
+Pago, zero e-mail, zero cron. O envelope de erro (item 1) já está pronto.
 
 **Estimativa total: 204 a 313 horas** de desenvolvimento (≈ 5 a 8 semanas de um dev
 full-time), sem contar os bloqueios não-código listados no fim deste documento.
@@ -31,7 +31,7 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
 
 | # | Item | Horas | Depende de |
 |---|---|---|---|
-| 1 | Envelope de erro padronizado (RNF-011) | 8-12 | — |
+| 1 | ~~Envelope de erro padronizado (RNF-011)~~ — concluído | 8-12 | — |
 | 2 | Validação de payload (DTOs + ValidationPipe) | 6-10 | 1 |
 | 3 | CORS dinâmico + plugar o guard de host | 8-12 | — |
 | 4 | Corrigir trigger de integridade em `usuario` (RN-051t) — bug real, ver pendências | 2-3 | — |
