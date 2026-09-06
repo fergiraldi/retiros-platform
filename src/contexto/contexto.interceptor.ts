@@ -12,7 +12,10 @@ import type { ContextoRequisicao, HostReconhecido } from './contexto.types';
 import { UnidadeDeTrabalhoService } from './unidade-de-trabalho.service';
 
 export const SEM_TRANSACAO = 'sem_transacao';
-/** Marca uma rota que não precisa de contexto de transação (ex.: /saude). */
+/**
+ * Marca uma rota (ou um controller inteiro) que não precisa de contexto de
+ * transação — hoje só o healthcheck.
+ */
 export const SemTransacao = () => SetMetadata(SEM_TRANSACAO, true);
 
 export interface RequisicaoComContexto extends Request {
@@ -46,7 +49,13 @@ export class ContextoInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    const semTransacao = this.reflector.get<boolean>(SEM_TRANSACAO, ctx.getHandler());
+    // `getAllAndOverride`, não `get`: o decorator vale tanto no handler quanto
+    // no controller inteiro, igual ao `@SemResolucaoDeHost()`. Com `get` no
+    // handler, marcar a classe não surtia efeito nenhum, em silêncio.
+    const semTransacao = this.reflector.getAllAndOverride<boolean>(SEM_TRANSACAO, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
     if (semTransacao) {
       return next.handle();
     }
