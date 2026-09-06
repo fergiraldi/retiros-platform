@@ -26,8 +26,8 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
 - Role de runtime `app_api` restrita, sem `BYPASSRLS`
 - 3 specs de teste de banco (`test/isolamento.spec.ts`, `test/rls-cobertura.spec.ts`,
   `test/contexto-transacao.spec.ts`)
-- `ResolvedorDeHostGuard` está escrito e correto, mas ainda não plugado em nenhuma rota
-  (ver [pendencias-tecnicas.md](pendencias-tecnicas.md))
+- Resolução de inquilino por host plugada como `APP_GUARD` global (RNF-006), com CORS
+  dinâmico sobre o mesmo reconhecedor (`ReconhecedorDeHostService`, RN-061t)
 
 ## Ordem de execução
 
@@ -35,7 +35,7 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
 |---|---|---|---|
 | 1 | ~~Envelope de erro padronizado (RNF-011)~~ — concluído | 8-12 | — |
 | 2 | ~~Validação de payload (DTOs + ValidationPipe)~~ — concluído (Zod) | 6-10 | 1 |
-| 3 | CORS dinâmico + plugar o guard de host | 8-12 | — |
+| 3 | ~~CORS dinâmico + plugar o guard de host~~ — concluído | 8-12 | — |
 | 4 | Corrigir trigger de integridade em `usuario` (RN-051t) — bug real, ver pendências | 2-3 | — |
 | 5 | Autenticação Supabase JWT + papel efetivo | 16-24 | 1, 3 |
 | 5b | Contas de acesso — convite, ativação, revogação (F8, RN-017 a RN-019) | 10-14 | 5, 19 |

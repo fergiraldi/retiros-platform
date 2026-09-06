@@ -18,6 +18,14 @@ item novo, na seção da iteração em que foi descoberto. Não é backlog de fe
 Itens encontrados durante a configuração dos ambientes dev/hom/prod/ci e o
 levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
 
+### ~~`ResolvedorDeHostGuard` escrito mas não plugado em nenhuma rota~~
+
+- **Status**: **resolvido em 06/09/2026**, no item 3 de proximos-passos.md. O guard passou a
+  ser `APP_GUARD` global em `src/app.module.ts` (RNF-006: toda rota resolve o inquilino pelo
+  host, não só as de domínio), com o decorator `@SemResolucaoDeHost()` isentando o
+  healthcheck, que a Railway chama pelo host interno. A consulta em si saiu do guard para o
+  `ReconhecedorDeHostService`, que o CORS dinâmico usa pelo mesmo caminho.
+
 ### Etapa de drift-check do CI está flaky e foi removida do fluxo de bloqueio
 
 - **Descrição**: a etapa "Confere que src/db/schema.ts está sincronizado com as
@@ -44,19 +52,6 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   o trigger existe para barrar nas outras 5 tabelas.
 - **Status**: aberto. Corrigir antes de popular contas de acesso multi-central
   (bloqueia o item 5b de próximos-passos.md). Esforço: 2-3h.
-
-### `ResolvedorDeHostGuard` escrito mas não plugado em nenhuma rota
-
-- **Descrição**: `src/contexto/resolvedor-de-host.guard.ts` resolve o inquilino pelo
-  host corretamente e devolve 404 neutro para host desconhecido, mas nunca é
-  aplicado via `@UseGuards(...)` em nenhum controller nem registrado como
-  `APP_GUARD` global. É provider declarado e exportado pelo `ContextoModule`, nunca
-  consumido — código morto no sentido estrito (inalcançável).
-- **Impacto**: nenhum, hoje (só existe o `/saude`, que não precisa dele). Mas é
-  risco de esquecimento: alguém pode reimplementar resolução de host do zero no
-  primeiro controller de domínio se isso não for lembrado.
-- **Status**: aberto. Resolve-se naturalmente no item 3 de próximos-passos.md
-  ("CORS dinâmico + plugar o guard de host").
 
 ### Política de RLS de `inquilino_dominio` mais ampla que a spec descreve
 
@@ -88,6 +83,26 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   proteção existe.
 - **Status**: aberto. Esforço estimado: 6-12h (parte do item 5 de
   próximos-passos.md, autenticação/autorização).
+
+---
+
+## Item 3 — CORS dinâmico e resolução por host (06/09/2026)
+
+### `X-Forwarded-Host` não é protegido pelo hop-count do `trust proxy`
+
+- **Descrição**: `src/main.ts` liga `app.set('trust proxy', ambiente.PROXIES_CONFIAVEIS)`, sem
+  o que `req.hostname` ignoraria `X-Forwarded-Host` e a resolução por host receberia o host
+  interno do container na Railway. Só que o número de saltos do Express protege
+  `X-Forwarded-For`, **não** `X-Forwarded-Host`: quem alcançar o processo sem passar pelo
+  proxy pode escolher o host da requisição, e portanto o inquilino resolvido.
+- **Impacto**: limitado, mas real. O host forjado ainda precisa ser um host já reconhecido —
+  não dá para inventar inquilino — e RN-060t manda a área autenticada validar
+  `usuario.inquilino_id` contra o host resolvido, com `403` na divergência, então a travessia
+  não alcança dado autenticado de outro inquilino. O que se ganha forjando é o mesmo que se
+  ganha visitando o subdomínio do outro inquilino pelo navegador: a área pública dele.
+- **Status**: aberto. A mitigação é de infraestrutura, não de código — garantir que a Railway
+  seja o único caminho de entrada do processo. Revisitar no item 5 (autenticação), que é
+  quando a RN-060t sai do papel.
 
 ---
 

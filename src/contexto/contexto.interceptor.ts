@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { from, lastValueFrom, Observable } from 'rxjs';
-import type { ContextoRequisicao } from './contexto.types';
+import type { ContextoRequisicao, HostReconhecido } from './contexto.types';
 import { UnidadeDeTrabalhoService } from './unidade-de-trabalho.service';
 
 export const SEM_TRANSACAO = 'sem_transacao';
@@ -17,6 +17,14 @@ export const SemTransacao = () => SetMetadata(SEM_TRANSACAO, true);
 
 export interface RequisicaoComContexto extends Request {
   contextoRetiros?: ContextoRequisicao;
+  /**
+   * O que o `ResolvedorDeHostGuard` reconheceu. Separado de `contextoRetiros`
+   * de propósito: aquele é o contrato dos quatro GUCs que a transação escreve,
+   * e a situação do inquilino não é GUC — é o que as rotas consultam para
+   * bloquear inscrição em inquilino `suspenso` (RN-063t) e área pública em
+   * `em_implantacao` (CA-34).
+   */
+  hostResolvido?: HostReconhecido;
 }
 
 /**
