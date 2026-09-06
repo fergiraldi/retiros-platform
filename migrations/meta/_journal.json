@@ -6,6 +6,7 @@
     { "idx": 1, "version": "7", "when": 1756000000001, "tag": "0001_contexto_e_rls", "breakpoints": true },
     { "idx": 2, "version": "7", "when": 1756000000002, "tag": "0002_funcoes_de_dominio", "breakpoints": true },
     { "idx": 3, "version": "7", "when": 1756000000003, "tag": "0003_integridade", "breakpoints": true },
-    { "idx": 4, "version": "7", "when": 1756000000004, "tag": "0004_endurecimento_search_path", "breakpoints": true }
+    { "idx": 4, "version": "7", "when": 1756000000004, "tag": "0004_endurecimento_search_path", "breakpoints": true },
+    { "idx": 5, "version": "7", "when": 1756000000005, "tag": "0005_integridade_usuario", "breakpoints": true }
   ]
 }

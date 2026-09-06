@@ -267,3 +267,4 @@ Estes são os testes que impedem o defeito que encerra o produto.
 11. **Suspensão** — inquilino suspenso bloqueia inscrição, mantém consulta e não apaga nada.
 12. **Acesso de suporte** — operador sem concessão recebe `403` em dado pessoal; com concessão, lê e cada leitura é auditada; após expirar, `403` de novo.
 13. **Rótulos** — inquilino que chama servo de "obreiro" vê "obreiro" em tela, e-mail e PDF, enquanto a API continua respondendo `"tipo": "servo"`.
+14. **Cobertura da RN-051t** — para cada tabela com o par `inquilino_id` + `central_id`, o trigger de validação está pendurado; a única exceção declarada é `auditoria`, cujo `central_id` não tem FK de propósito (o log sobrevive à exclusão da central). Escrita que aponte para central de outro inquilino — ou que traga central sem inquilino — é recusada no banco, não só na aplicação.

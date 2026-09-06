@@ -18,6 +18,28 @@ item novo, na seção da iteração em que foi descoberto. Não é backlog de fe
 Itens encontrados durante a configuração dos ambientes dev/hom/prod/ci e o
 levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
 
+### ~~RN-051t não cobre a tabela `usuario`~~
+
+- **Status**: **resolvido em 06/09/2026**, no item 4 de proximos-passos.md. A
+  `migrations/0005_integridade_usuario.sql` pendura o `validar_central_do_inquilino_trg` em
+  `usuario`, fechando a escrita de um `admin_central` com `central_id` de outra central — que a
+  RLS não barrava, porque a permissiva `usuario_central` dá passe livre a `admin_denominacao` e a
+  restritiva só confere `inquilino_id`.
+- **Achado no caminho**: `usuario` é a única tabela coberta em que `inquilino_id` **também** é
+  nulável (papel `operador`). A função como estava na 0003 não bastava: `v_inquilino_da_central <>
+  null` avalia para `NULL`, o `if` não dispara e a linha com central e sem inquilino passaria. A
+  função ganhou ramo próprio para isso, e `search_path` fixo no idioma da 0004 — ela referencia
+  `central` sem qualificar schema.
+- **Exceção declarada**: `auditoria` tem o mesmo par e fica **fora** do trigger de propósito —
+  `central_id` lá é `uuid` puro, sem FK, para o log sobreviver à exclusão da central. O trigger
+  recusaria linha de auditoria cuja central já não existe.
+- **Ressalva**: a migration não revalida linhas pré-existentes, e não tem como — `force row level
+  security` alcança o dono do schema e a migration roda sem os GUCs `app.*`, então qualquer
+  `select` de conferência enxergaria zero linhas. Sem impacto hoje: `usuario` não tem dado real
+  até a autenticação (item 5).
+- **Rede**: `test/integridade-central.spec.ts`, com o teste de catálogo que teria pego a falta —
+  toda tabela com o par tem o trigger, fora as exceções declaradas (§9.14 de 00-multi-inquilino.md).
+
 ### ~~`ResolvedorDeHostGuard` escrito mas não plugado em nenhuma rota~~
 
 - **Status**: **resolvido em 06/09/2026**, no item 3 de proximos-passos.md. O guard passou a
@@ -40,18 +62,6 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
 - **Status**: aberto. Opções levantadas e ainda não decididas: (a) filtrar do diff as
   linhas `pgPolicy(` antes de comparar, (b) remover a etapa do CI, (c) deixá-la
   não-bloqueante (`continue-on-error`).
-
-### RN-051t não cobre a tabela `usuario`
-
-- **Descrição**: o trigger `validar_central_do_inquilino_trg`
-  (`migrations/0003_integridade.sql`) cobre `encontro`, `inscricao`, `cobranca`,
-  `notificacao` e `conexao_gateway`, mas não `usuario` — que tem o mesmo par
-  `inquilino_id` + `central_id` nullable (preenchido para `admin_central`).
-- **Impacto**: hoje é possível gravar um `admin_central` com `central_id` de uma
-  central que pertence a outro inquilino — exatamente a "combinação impossível" que
-  o trigger existe para barrar nas outras 5 tabelas.
-- **Status**: aberto. Corrigir antes de popular contas de acesso multi-central
-  (bloqueia o item 5b de próximos-passos.md). Esforço: 2-3h.
 
 ### Política de RLS de `inquilino_dominio` mais ampla que a spec descreve
 

@@ -28,6 +28,9 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
   `test/contexto-transacao.spec.ts`)
 - Resolução de inquilino por host plugada como `APP_GUARD` global (RNF-006), com CORS
   dinâmico sobre o mesmo reconhecedor (`ReconhecedorDeHostService`, RN-061t)
+- Integridade do par inquilino/central (RN-051t) cobrindo as 6 tabelas com o par, com
+  teste de catálogo que falha se uma tabela nova nascer sem o trigger
+  (`test/integridade-central.spec.ts`)
 
 ## Ordem de execução
 
@@ -36,7 +39,7 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
 | 1 | ~~Envelope de erro padronizado (RNF-011)~~ — concluído | 8-12 | — |
 | 2 | ~~Validação de payload (DTOs + ValidationPipe)~~ — concluído (Zod) | 6-10 | 1 |
 | 3 | ~~CORS dinâmico + plugar o guard de host~~ — concluído | 8-12 | — |
-| 4 | Corrigir trigger de integridade em `usuario` (RN-051t) — bug real, ver pendências | 2-3 | — |
+| 4 | ~~Corrigir trigger de integridade em `usuario` (RN-051t)~~ — concluído | 2-3 | — |
 | 5 | Autenticação Supabase JWT + papel efetivo | 16-24 | 1, 3 |
 | 5b | Contas de acesso — convite, ativação, revogação (F8, RN-017 a RN-019) | 10-14 | 5, 19 |
 | 6 | Rate limit por IP e por CPF (RNF-012) | 8-14 | 1 |
