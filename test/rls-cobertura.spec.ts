@@ -6,7 +6,11 @@ import { pool } from '../src/db/conexao';
  * se alguma estiver sem `enable row level security` E `force row level security`.
  *
  * Exceções declaradas na spec (00-multi-inquilino.md §5 / RN-067t, RN-124, RN-135):
- * - identidade: global, fora do isolamento por inquilino, sem select para role de aplicação.
+ * - identidade: global, fora do isolamento por inquilino. A spec manda RN-124 tirar o
+ *   `select` da role de aplicação, mas isso ainda NÃO vale: as roles `app_api`/`app_publico`
+ *   nunca foram criadas e a role de runtime, que é dona das tabelas, lê `identidade` direto
+ *   (conferido no banco em 06/09/2026 — ver "RN-124 e RN-138 são letra morta" em
+ *   docs/pendencias-tecnicas.md). Não confunda o que a spec pede com o que o banco faz.
  * - webhook_evento: nasce antes de sabermos de quem é o evento; acesso só do processador.
  */
 const EXCECOES_DECLARADAS = ['identidade', 'webhook_evento'];

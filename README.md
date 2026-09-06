@@ -25,4 +25,6 @@ Cobre o ciclo completo de um encontro: publicação na agenda, inscrição de pa
 
 ## Situação
 
-Em definição. Nenhum código escrito ainda — a fase atual é o fechamento das specs a partir do PRD.
+Fase 1 em desenvolvimento, com a fundação de plataforma entregue: contexto multi-inquilino por transação, RLS de dois níveis nas 17 tabelas de domínio, resolução de inquilino por host, CORS dinâmico, envelope de erro padronizado e validação de payload com Zod.
+
+Fora do healthcheck `GET /saude`, ainda não existe controller de domínio — sem autenticação, pagamento, e-mail ou cron. O que falta, em ordem de execução e com esforço estimado, está em [docs/proximos-passos.md](docs/proximos-passos.md).

@@ -8,9 +8,9 @@
 
 A Fase 1 está longe de liberável. O que existe hoje é só a fundação de plataforma —
 contexto transacional por request, RLS de dois níveis, as 17 tabelas de domínio,
-funções SQL e as 3 specs de teste de banco (isolamento, cobertura de RLS, contexto de
-transação). **Fora do healthcheck `GET /saude`, não existe um único controller de
-domínio.** Zero autenticação, zero integração com Mercado Pago, zero e-mail, zero
+funções SQL e as 5 specs de teste de banco (isolamento, cobertura de RLS, contexto de
+transação, resolução por host, integridade do par inquilino/central). **Fora do
+healthcheck `GET /saude`, não existe um único controller de domínio.** Zero autenticação, zero integração com Mercado Pago, zero e-mail, zero
 cron. O envelope de erro (item 1) e o mecanismo de validação de payload (item 2, com
 Zod) já estão prontos — sem nenhum DTO de endpoint real ainda, porque não há
 controller de domínio pra aplicar.
@@ -23,14 +23,19 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
 - Contexto multi-inquilino por transação (`ContextoInterceptor` + `UnidadeDeTrabalhoService`,
   `src/contexto/`)
 - RLS de dois níveis nas 17 tabelas, com teste de cobertura da RN-141
-- Role de runtime `app_api` restrita, sem `BYPASSRLS`
-- 3 specs de teste de banco (`test/isolamento.spec.ts`, `test/rls-cobertura.spec.ts`,
-  `test/contexto-transacao.spec.ts`)
+- Role de runtime sem `BYPASSRLS` e sem `superuser`, com a RLS alcançando-a mesmo sendo dona
+  das tabelas (`force row level security`) — conferido no banco em 06/09/2026. A separação
+  de roles (`app_api` / `app_publico`) da spec, essa sim, **não** existe; ver "RN-124 e
+  RN-138 são letra morta" em [pendencias-tecnicas.md](pendencias-tecnicas.md)
+- 5 specs de teste de banco (`test/isolamento.spec.ts`, `test/rls-cobertura.spec.ts`,
+  `test/contexto-transacao.spec.ts`, `test/host-resolucao.spec.ts`,
+  `test/integridade-central.spec.ts`)
 - Resolução de inquilino por host plugada como `APP_GUARD` global (RNF-006), com CORS
   dinâmico sobre o mesmo reconhecedor (`ReconhecedorDeHostService`, RN-061t)
-- Integridade do par inquilino/central (RN-051t) cobrindo as 6 tabelas com o par, com
-  teste de catálogo que falha se uma tabela nova nascer sem o trigger
-  (`test/integridade-central.spec.ts`)
+- Integridade do par inquilino/central (RN-051t) cobrindo 6 das 7 tabelas com o par —
+  `auditoria` é exceção declarada, ver pendencias-tecnicas.md —, com teste de catálogo que
+  falha se uma tabela nova nascer sem o trigger
+- Validador de CPF (`src/validacao/cpf.ts`), insumo dos itens 6 e 10
 
 ## Ordem de execução
 
