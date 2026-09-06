@@ -707,7 +707,9 @@ Exceções, todas justificadas:
 | `identidade` | global, sem RLS, sem `select` para role de aplicação (RN-124) |
 | `webhook_evento` | sem RLS por inquilino, acesso só do processador (RN-135) |
 | `inquilino` | leitura da própria linha; escrita só pelo operador |
-| `inquilino_dominio` | leitura pública **apenas** do host consultado, por função dedicada |
+| `inquilino_dominio` | leitura pública de **todo** domínio verificado, de qualquer inquilino; escrita só dentro do próprio (RN-120) |
+
+A leitura ampla de `inquilino_dominio` é deliberada, e o texto acima já foi mais estreito do que o código: a função `resolver_inquilino_por_host` filtra pelo host consultado, mas a policy abaixo dela (`inquilino_dominio_leitura_publica`) libera `select` de todo domínio verificado, em qualquer contexto. Consequência aceita: um inquilino consegue enumerar os domínios verificados dos outros por query direta. O dado é exatamente o que a página pública de cada um já expõe, e estreitar a policy quebraria a resolução por host, que precisa ler a tabela **antes** de existir contexto de inquilino. `test/isolamento.spec.ts` afirma esse comportamento como design, não como tolerância.
 
 **RN-141** — Existe teste automatizado que enumera `pg_tables` e falha se alguma tabela de domínio estiver sem `enable row level security` **e** `force row level security`. Tabela nova entra no sistema sem proteção com uma facilidade que só um teste dessa forma pega — revisão de PR não pega. É o próprio "como" que sustenta a RNF-001 (§8.1 do PRD).
 

@@ -44,48 +44,44 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   healthcheck, que a Railway chama pelo host interno. A consulta em si saiu do guard para o
   `ReconhecedorDeHostService`, que o CORS dinâmico usa pelo mesmo caminho.
 
-### Etapa de drift-check do CI está flaky e continua bloqueando
+### ~~Etapa de drift-check do CI está flaky e continua bloqueando~~
 
-- **Descrição**: a etapa "Confere que src/db/schema.ts está sincronizado com as
-  migrations" (`.github/workflows/ci.yml`) falha de forma intermitente. O
-  `drizzle-kit pull` troca as cláusulas `using`/`withCheck` entre policies do mesmo
-  nome quando uma tabela tem mais de uma policy — confirmado consultando
-  `pg_policies` diretamente: o banco está correto, é bug de geração do TypeScript
-  pelo `drizzle-kit`, não do schema real.
-- **Impacto**: como o ambiente `hom` no Railway tem "Wait for CI" ligado, essa etapa
-  vermelha impede o deploy automático de `hom` a cada push em `main`, mesmo quando
-  não há divergência real nenhuma.
-- **Reobservado em 06/09/2026** (item 4): `pnpm db:pull` num schema sem nenhuma mudança de
-  estrutura produziu 34 linhas alteradas em `src/db/schema.ts`, **todas** trocas de `pgPolicy(`
-  entre as duas policies da mesma tabela — nenhuma linha fora disso. Reforça o diagnóstico: o
-  drift é 100% artefato de geração. Efeito colateral prático: rodar `db:pull` para conferir o
-  drift suja o working tree e exige `git checkout` depois.
-- **Status**: aberto. A etapa **não** foi removida do fluxo de bloqueio, apesar do que o título
-  antigo deste item dizia — ela segue em `ci.yml` sem `continue-on-error`.
-- **Direção decidida em 06/09/2026, ainda não implementada**: opção (a) — filtrar do diff as
-  linhas `pgPolicy(` antes de comparar. Mantém a trava valendo para divergência real de schema
-  e mata o falso positivo que bloqueia o deploy de `hom`. As descartadas: (b) remover a etapa,
-  (c) `continue-on-error`, que a transformaria em ruído que ninguém olha. Esforço: ~30 min.
+- **Status**: **resolvido em 06/09/2026**, pela opção (a). A etapa em `.github/workflows/ci.yml`
+  filtra do diff as linhas com `pgPolicy(` antes de comparar; qualquer outra linha ainda
+  reprova, com a lista do que divergiu. A trava contra migration mudada sem `db:pull` continua
+  valendo — só o falso positivo saiu.
+- **Medido antes de implementar**: `db:pull` num schema sem mudança de estrutura produziu 34
+  linhas alteradas, **68 linhas `+`/`-`, todas com `pgPolicy(`** — o filtro cobre 100% do
+  ruído observado. Validado nos três cenários: árvore limpa passa, ruído de `pgPolicy` passa,
+  linha estranha injetada reprova com `exit 1`.
+- **Não resolve o bug de origem**, que é do `drizzle-kit`: rodar `db:pull` à mão ainda suja o
+  working tree e ainda exige `git checkout` depois.
 
-### Política de RLS de `inquilino_dominio` mais ampla que a spec descreve
+- **A causa, para quando reaparecer**: o `drizzle-kit pull` troca as cláusulas
+  `using`/`withCheck` entre policies de mesmo nome quando uma tabela tem mais de uma —
+  confirmado consultando `pg_policies` direto: o banco está correto, é bug de geração do
+  TypeScript, não do schema real. O bloqueio vinha do "Wait for CI" ligado no `hom`, que
+  parava o deploy a cada push em `main` sem divergência nenhuma.
+- **Descartadas**: (b) remover a etapa, (c) `continue-on-error` — viraria ruído que ninguém
+  olha, sem trava de verdade.
 
-- **Descrição**: `specs/fase-1/00-multi-inquilino.md` §5 descreve a leitura pública
-  de `inquilino_dominio` como "apenas do host consultado, por função dedicada". A
-  função dedicada (`resolver_inquilino_por_host`) filtra certo, mas a política de
-  RLS abaixo dela (`migrations/0001_contexto_e_rls.sql:181-183`) libera `select` de
-  **todos** os domínios verificados de **todos** os inquilinos, em qualquer
-  contexto — e `test/isolamento.spec.ts:104-115` já afirma isso como design
-  esperado.
-- **Impacto**: um inquilino consegue enumerar os domínios verificados de outros
-  inquilinos via query direta (não via a função pública, que já é estreita). Dado
-  não é sensível (é o que a página pública já mostra), mas diverge do texto da
-  spec.
-- **Status**: aberto.
-- **Direção decidida em 06/09/2026, ainda não implementada**: atualizar a **spec**
-  (`00-multi-inquilino.md` §5) para documentar a leitura pública como intencional, não apertar
-  a policy. O dado é o que a página pública já mostra, e apertar exigiria reescrever
-  `test/isolamento.spec.ts:104-115`, que hoje afirma o comportamento como design deliberado.
-  Esforço: ~20 min.
+### ~~Política de RLS de `inquilino_dominio` mais ampla que a spec descreve~~
+
+- **Status**: **resolvido em 06/09/2026**, corrigindo a **spec**, não a policy. A tabela de
+  exceções de `specs/fase-1/01-modelo-de-dados.md` §5 agora descreve a leitura pública como
+  ela é — todo domínio verificado, de qualquer inquilino — com um parágrafo dizendo por que é
+  deliberada: o dado é o que a página pública de cada inquilino já expõe, e estreitar a policy
+  quebraria a resolução por host, que lê a tabela **antes** de existir contexto de inquilino.
+- **Correção de referência**: este item apontava `00-multi-inquilino.md` §5, onde a §5 é
+  "Marca e rótulos". O texto estreito estava em `01-modelo-de-dados.md` §5 ("RLS"), linha 710
+  — arquivo errado, seção certa.
+- **Diagnóstico original**: a função dedicada (`resolver_inquilino_por_host`) filtra certo, mas
+  a política de RLS abaixo dela (`migrations/0001_contexto_e_rls.sql:181-183`) libera `select`
+  de **todos** os domínios verificados de **todos** os inquilinos, em qualquer contexto — e
+  `test/isolamento.spec.ts:104-115` já afirmava isso como design esperado. A consequência
+  aceita: um inquilino consegue enumerar os domínios verificados dos outros por query direta.
+- **Nenhuma migration foi tocada**: apertar a policy exigiria reescrever aquele teste, que é
+  justamente a evidência de que o comportamento é intencional.
 
 ### RN-124 e RN-138 são letra morta
 
@@ -131,7 +127,7 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   criei arquivo novo para isto. A fiação do decorator entra nos cenários do item 23, junto com
   os do guard e do CORS.
 
-### `PROXIES_CONFIAVEIS` ainda não foi configurado em hom/prod
+### ~~`PROXIES_CONFIAVEIS` ainda não foi configurado em hom/prod~~
 
 - **Descrição**: a variável nasceu com default `0` (`src/config/ambiente.ts`), que é o valor
   certo para o dev local, que fala direto com o processo. Na Railway, onde a requisição chega
@@ -142,9 +138,17 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   container, que não bate com nenhuma linha de `inquilino_dominio` — o guard responde `404`
   em toda rota. O `/saude` continua verde por ser isento, então o healthcheck **não** acusa o
   problema: o deploy sobe saudável e nada funciona.
-- **Status**: aberto. É configuração de ambiente, não código — definir `PROXIES_CONFIAVEIS=1`
-  em `hom` e `prod` antes de publicar a primeira rota de domínio (item 10). Conferir também
-  se a Railway insere mais de um salto de proxy; se inserir, o número muda.
+- **Status**: **resolvido em 06/09/2026**, e **verificado** — não apenas informado. Pelo CLI da
+  Railway (`railway variables`), `hom` e `prod` têm `PROXIES_CONFIAVEIS=1`; o `.env` do dev
+  local tem `=0`. Os valores são diferentes de propósito: `1` no local faria o Express aceitar
+  `X-Forwarded-Host` de qualquer cliente, sem proxy nenhum na frente.
+- **Conferido junto, no mesmo acesso**: `DB_SCHEMA_ESPERADO` é `hom` em hom e `prod` em prod
+  (a trava de schema aponta para o lugar certo em cada um), `NODE_ENV=production` nos dois, e
+  ambos respondem `200` em `/saude`, com o deploy mais recente em `SUCCESS`.
+- **Fica de pé para o item 10**: se a Railway inserir mais de um salto de proxy, o número
+  deixa de ser `1`. Não dá para medir hoje — em hom/prod `inquilino_dominio` está vazio, então
+  toda rota não isenta responde `404` de qualquer forma, sem distinguir a causa. Mede-se
+  comparando `req.hostname` com o `Host` enviado, na primeira rota de domínio que existir.
 
 ### `X-Forwarded-Host` não é protegido pelo hop-count do `trust proxy`
 
