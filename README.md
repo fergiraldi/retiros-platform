@@ -23,6 +23,25 @@ Cobre o ciclo completo de um encontro: publicação na agenda, inscrição de pa
 | Hospedagem API | Railway |
 | Pagamentos | Mercado Pago (marketplace, com split) |
 
+## Ambientes
+
+Quatro schemas do mesmo banco Supabase, um por ambiente, cada um com sua role (`app_dev`, `app_ci`, `app_hom`, `app_prod` — nenhuma com `BYPASSRLS`). A aplicação recusa subir se `current_schema()` não bater com `DB_SCHEMA_ESPERADO`, o que protege contra `.env` trocado.
+
+| Ambiente | Onde | Deploy | Migrations |
+|---|---|---|---|
+| `dev` | local | — | `pnpm db:migrate` na mão; `pnpm db:seed` popula os inquilinos de teste |
+| `ci` | GitHub Actions | — | o próprio workflow aplica antes de rodar a suíte |
+| `hom` | Railway | automático a cada push em `main`, depois do CI passar | aplicadas no deploy |
+| `prod` | Railway | **promoção manual** | **não** saem no deploy — é um ato à parte |
+
+A assimetria entre `hom` e `prod` é deliberada: homologação acompanha `main` sozinha, produção só muda por decisão. O efeito colateral é que **`prod` fica para trás em silêncio se alguém esquecer o passo da migration** — foi assim que ele acumulou duas pendentes. Ao promover para produção, aplique-as no mesmo ato:
+
+```sh
+DATABASE_URL=<url de prod> DB_SCHEMA_ESPERADO=prod pnpm db:migrate
+```
+
+`PROXIES_CONFIAVEIS` também difere por ambiente, e de propósito: `1` em `hom`/`prod`, que ficam atrás do proxy da Railway, e `0` no dev local, que fala direto com o processo.
+
 ## Situação
 
 Fase 1 em desenvolvimento, com a fundação de plataforma entregue: contexto multi-inquilino por transação, RLS de dois níveis nas 17 tabelas de domínio, resolução de inquilino por host, CORS dinâmico, envelope de erro padronizado e validação de payload com Zod.
