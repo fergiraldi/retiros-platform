@@ -112,6 +112,50 @@ describe('RN-051t — integridade do par inquilino/central', () => {
     });
   });
 
+  describe('auditoria (o buraco que a 0006 fechou)', () => {
+    it('linha de auditoria com central de outro inquilino é recusada', async () => {
+      const erro = await capturar(() =>
+        comoAdminDeA(async (tx) => {
+          await tx.execute(sql`
+            insert into auditoria (id, inquilino_id, central_id, entidade, entidade_id, acao, ator_tipo)
+            values (${randomUUID()}, ${a.inquilinoId}, ${b.centralId},
+                    'inscricao', ${a.inscricaoId}, 'criada', 'publico')
+          `);
+        }),
+      );
+
+      expect(erro).toBeDefined();
+      expect(erro.cause?.code).toBe('P0001');
+      expect(erro.cause?.message).toMatch(/RN-051t/);
+    });
+
+    it('linha de auditoria com a central legítima passa (controle positivo)', async () => {
+      await comoAdminDeA(async (tx) => {
+        const id = randomUUID();
+        await tx.execute(sql`
+          insert into auditoria (id, inquilino_id, central_id, entidade, entidade_id, acao, ator_tipo)
+          values (${id}, ${a.inquilinoId}, ${a.centralId},
+                  'inscricao', ${a.inscricaoId}, 'criada', 'publico')
+        `);
+        await tx.execute(sql`delete from auditoria where id = ${id}`);
+      });
+    });
+
+    it('auditoria de escopo de plataforma (sem inquilino e sem central) continua passando', async () => {
+      // Convite, mudança de papel e revogação de conta `operador` são atos
+      // sobre quem vive fora de qualquer inquilino (spec §4.7) — os dois
+      // campos vazios caem no primeiro ramo da função e não são barrados.
+      await uow.executar({ papel: 'operador' }, async (tx) => {
+        const id = randomUUID();
+        await tx.execute(sql`
+          insert into auditoria (id, inquilino_id, central_id, entidade, entidade_id, acao, ator_tipo)
+          values (${id}, null, null, 'usuario', ${randomUUID()}, 'papel_alterado', 'operador')
+        `);
+        await tx.execute(sql`delete from auditoria where id = ${id}`);
+      });
+    });
+  });
+
   describe('central sem inquilino — o ramo que só `usuario` alcança', () => {
     /**
      * `usuario` é a única tabela coberta em que `inquilino_id` também é nulável
@@ -178,11 +222,13 @@ describe('RN-051t — integridade do par inquilino/central', () => {
 
   describe('cobertura do trigger (o teste que teria pego a falta em `usuario`)', () => {
     /**
-     * `auditoria` tem o par, mas `central_id` lá é uuid puro, sem FK — de
-     * propósito, para o log sobreviver à exclusão da central. O trigger
-     * recusaria linha de auditoria cuja central já não existe mais.
+     * Nenhuma. `auditoria` era a única, até a 0006: ela não tem FK (é log
+     * polimórfico, por design da spec), mas central não é apagada — usa
+     * `ativa` — e, sob RLS, tolerar "central não encontrada" seria aceitar em
+     * silêncio a central de outro inquilino, que é justamente o que a RN-051t
+     * barra. As sete tabelas com o par têm o trigger.
      */
-    const EXCECOES_DECLARADAS = ['auditoria'];
+    const EXCECOES_DECLARADAS: string[] = [];
 
     async function nomes(consulta: string): Promise<string[]> {
       const { rows } = await pool.query<{ relname: string }>(consulta);
@@ -228,11 +274,11 @@ describe('RN-051t — integridade do par inquilino/central', () => {
       expect(comOTrigger.length).toBe(comOPar.length - EXCECOES_DECLARADAS.length);
     });
 
-    it('as exceções declaradas continuam sendo exatamente `auditoria`', () => {
+    it('não há exceção declarada nenhuma', () => {
       // Hard-coded de propósito, igual à RN-141: ninguém deve conseguir
       // "consertar" o teste acima movendo uma tabela pra cá sem que o diff
       // do PR mostre isso claramente.
-      expect(EXCECOES_DECLARADAS).toEqual(['auditoria']);
+      expect(EXCECOES_DECLARADAS).toEqual([]);
     });
 
     it('a função tem search_path fixo (mesma blindagem da 0004)', async () => {

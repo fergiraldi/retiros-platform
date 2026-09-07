@@ -234,23 +234,29 @@ O que a `migrations/0005_integridade_usuario.sql` deliberadamente deixou de fora
 impede a Fase 1 hoje — todos ficam maiores quando `usuario` e `auditoria` passarem a ter dado
 real (itens 5, 5b e 18 de [proximos-passos.md](proximos-passos.md)).
 
-### `auditoria` não tem guarda para o par inquilino/central
+### ~~`auditoria` não tem guarda para o par inquilino/central~~
 
-- **Descrição**: `auditoria` tem `inquilino_id` + `central_id`, mas ficou fora do
-  `validar_central_do_inquilino_trg`: nessa tabela **as duas** colunas são `uuid` puro, sem FK
-  nenhuma (`migrations/0000_estrutura.sql:534-535`) — ao contrário das outras seis. A migration
-  não explica o porquê, mas o motivo aparente é o log ter de sobreviver à exclusão das linhas
-  que ele registra; o trigger recusaria linha de auditoria cuja central já não existe mais. A
-  exceção está declarada em `test/integridade-central.spec.ts` (`EXCECOES_DECLARADAS`), então é
-  visível — mas nada valida o par nessa tabela.
-- **A confirmar**: se a ausência de FK foi mesmo decisão consciente. Não há comentário na
-  migration nem menção na spec — pode ser omissão, e nesse caso a resposta muda.
-- **Impacto**: nulo hoje (nada escreve auditoria de verdade ainda — item 18). Quando escrever,
-  uma linha de auditoria pode registrar `central_id` de central de outro inquilino sem que nada
-  reclame. A RLS continua barrando o `inquilino_id` errado; é só o `central_id` que fica solto.
-- **Status**: aberto. Decidir no item 18 (auditoria efetiva) entre validar no ponto de escrita
-  da aplicação ou um trigger próprio que aceite central inexistente e recuse central de outro
-  inquilino. Esforço: 1-2h dentro do item 18.
+- **Status**: **resolvido em 06/09/2026**, pela `migrations/0006_integridade_auditoria.sql`.
+  `auditoria` passou a usar o **mesmo** `validar_central_do_inquilino_trg` das outras seis —
+  sem função própria — e saiu de `EXCECOES_DECLARADAS`, que agora é uma lista vazia. As sete
+  tabelas com o par estão cobertas, conferido no catálogo do banco.
+- **O "a confirmar" foi confirmado**: a ausência de FK é deliberada. O bloco SQL da spec
+  (`01-modelo-de-dados.md` §4.7) declara `auditoria` sem `references` nenhuma, enquanto o §4.8
+  logo abaixo mostra `usuario` **com** as duas FKs. `entidade_id` também não tem FK — é log
+  polimórfico, e esse é o design.
+- **Por que a exceção não se sustentava**, apesar da FK ausente ser consciente: o argumento era
+  o log sobreviver à exclusão da central, mas central **não é apagada** (tem `ativa`; RN-063t,
+  "dado nunca é apagado"; o único `delete from central` do repositório é fixture em
+  `test/ajuda/semear.ts`). E, decisivo: sob RLS a função não distingue "central não existe" de
+  "central é de outro inquilino" — as duas somem do `select`, como a própria 0005 admite na
+  mensagem. Um trigger tolerante ao "não encontrei" aceitaria em silêncio justamente o caso a
+  barrar; tolerância e detecção são mutuamente exclusivas aqui.
+- **Efeito colateral conhecido**, registrado na migration: auditoria gravada sem contexto de
+  inquilino (GUCs vazios, como no webhook órfão) e com `central_id` preenchido passa a ser
+  recusada — nesse contexto nenhuma central é visível. Ato de escopo de plataforma (operador,
+  `inquilino_id` nulo) não é afetado enquanto vier sem `central_id`, que é o caso da spec.
+- **Coberto por teste**: recusa de central de outro inquilino, controle positivo, e o ato de
+  plataforma com os dois campos nulos passando (`test/integridade-central.spec.ts`).
 
 ### Linhas pré-existentes nunca foram revalidadas contra a RN-051t
 

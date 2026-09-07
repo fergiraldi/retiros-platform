@@ -32,9 +32,8 @@ full-time), sem contar os bloqueios não-código listados no fim deste documento
   `test/integridade-central.spec.ts`)
 - Resolução de inquilino por host plugada como `APP_GUARD` global (RNF-006), com CORS
   dinâmico sobre o mesmo reconhecedor (`ReconhecedorDeHostService`, RN-061t)
-- Integridade do par inquilino/central (RN-051t) cobrindo 6 das 7 tabelas com o par —
-  `auditoria` é exceção declarada, ver pendencias-tecnicas.md —, com teste de catálogo que
-  falha se uma tabela nova nascer sem o trigger
+- Integridade do par inquilino/central (RN-051t) cobrindo as 7 tabelas com o par, sem
+  exceção, com teste de catálogo que falha se uma tabela nova nascer sem o trigger
 - Validador de CPF (`src/validacao/cpf.ts`), insumo dos itens 6 e 10
 
 ## Ordem de execução
