@@ -270,18 +270,22 @@ real (itens 5, 5b e 18 de [proximos-passos.md](proximos-passos.md)).
   inquilino — com os GUCs setados, um `select` por tabela cruzando `central_id` com
   `central.inquilino_id` — e só então confiar que o estoque está limpo. Esforço: 1-2h.
 
-### Nada revalida os filhos se `central.inquilino_id` mudar
+### ~~Nada revalida os filhos se `central.inquilino_id` mudar~~
 
-- **Descrição**: o trigger valida o filho no momento em que o filho é escrito. Não há trigger no
-  lado de `central`: se o `inquilino_id` de uma central mudasse, todo `encontro`, `inscricao`,
-  `cobranca`, `usuario`, `notificacao` e `conexao_gateway` abaixo dela viraria a combinação
-  impossível que a RN-051t existe para impedir, sem nada disparar.
-- **Impacto**: nenhum caminho alcançável hoje. A política restritiva `central_inquilino` tem
-  `with check (inquilino_id = app_inquilino_id())`, então mover uma central para outro inquilino
-  é recusado pela RLS. O ponto é que a proteção vem inteira da RLS — não há guarda no banco
-  independente dela, e uma futura política de `central` mais frouxa abriria isso em silêncio.
-- **Status**: aberto, baixa prioridade. Opções: (a) trigger em `central` recusando `update` de
-  `inquilino_id`, (b) deixar como está e documentar a dependência na spec. Esforço: 1-2h.
+- **Status**: **resolvido em 06/09/2026**, pela `migrations/0007_central_inquilino_imutavel.sql`,
+  opção (a): `before update` em `central` recusando qualquer troca de `inquilino_id`.
+  Imutabilidade em vez de revalidação em cascata — central não muda de denominação, e trocá-la
+  levaria junto encontros divulgados, inscrições pagas e cobranças já emitidas no gateway, que
+  nasceram sob outra e continuam dela.
+- **A RLS já barrava**, e continua barrando: a restritiva `central_inquilino` tem `using` **e**
+  `with check` iguais a `inquilino_id = app_inquilino_id()` — mover exigiria contexto da origem
+  e destino igual à origem ao mesmo tempo. O trigger é defesa em profundidade: a proteção vinha
+  inteira da RLS, e afrouxar aquela policy abriria isto em silêncio.
+- **Quem responde agora é o trigger, não a RLS**: no Postgres o `before row` roda antes da
+  verificação do `with check`, então o erro é `P0001` com a mensagem da RN-051t, não o `42501`
+  genérico de RLS. Melhor diagnóstico para quem esbarrar nisso.
+- **Coberto por teste**: troca recusada, edição de outro campo passando, e reescrever o mesmo
+  `inquilino_id` passando — `is distinct from`, não `<>`, para não confundir reescrita com troca.
 
 ---
 

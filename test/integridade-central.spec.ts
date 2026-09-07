@@ -220,6 +220,48 @@ describe('RN-051t — integridade do par inquilino/central', () => {
     });
   });
 
+  describe('`central.inquilino_id` é imutável (0007)', () => {
+    /**
+     * A RLS já barrava este caminho — a restritiva `central_inquilino` tem
+     * `using` e `with check` iguais a `inquilino_id = app_inquilino_id()`. O
+     * trigger é defesa em profundidade, para o dia em que alguém afrouxar
+     * aquela policy sem saber que ela sustentava a RN-051t inteira.
+     *
+     * Quem responde aqui é o trigger, não a RLS: no Postgres, BEFORE ROW roda
+     * antes da verificação do `with check`, então o erro é P0001, não 42501.
+     */
+    it('mover a central para outro inquilino é recusado', async () => {
+      const erro = await capturar(() =>
+        comoAdminDeA(async (tx) => {
+          await tx.execute(sql`
+            update central set inquilino_id = ${b.inquilinoId} where id = ${a.centralId}
+          `);
+        }),
+      );
+
+      expect(erro).toBeDefined();
+      expect(erro.cause?.code).toBe('P0001');
+      expect(erro.cause?.message).toMatch(/inquilino_id de central e imutavel/);
+    });
+
+    it('editar outro campo da central continua passando (controle positivo)', async () => {
+      await comoAdminDeA(async (tx) => {
+        await tx.execute(sql`
+          update central set telefone_contato = '4530000000' where id = ${a.centralId}
+        `);
+      });
+    });
+
+    it('reafirmar o mesmo inquilino_id passa — só a troca é barrada', async () => {
+      // `is distinct from` e não `<>`: reescrever o mesmo valor não é troca.
+      await comoAdminDeA(async (tx) => {
+        await tx.execute(sql`
+          update central set inquilino_id = ${a.inquilinoId} where id = ${a.centralId}
+        `);
+      });
+    });
+  });
+
   describe('cobertura do trigger (o teste que teria pego a falta em `usuario`)', () => {
     /**
      * Nenhuma. `auditoria` era a única, até a 0006: ela não tem FK (é log

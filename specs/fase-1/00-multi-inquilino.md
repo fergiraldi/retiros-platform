@@ -21,7 +21,7 @@ Identidade (global)   CPF + nome — reconhece a pessoa em qualquer inquilino
 
 **RN-050t** — `inquilino_id` é a **primeira** coluna de toda tabela de domínio, inclusive nas que poderiam derivá-lo por join. Denormalização deliberada: política de RLS com join é cara e frágil, e este é o filtro mais executado do sistema.
 
-**RN-051t** — `central_id` acompanha `inquilino_id` em toda tabela abaixo de central. Trigger valida que a central pertence ao inquilino informado, impedindo linha com combinação impossível.
+**RN-051t** — `central_id` acompanha `inquilino_id` em toda tabela abaixo de central. Trigger valida que a central pertence ao inquilino informado, impedindo linha com combinação impossível. O trigger valida o filho quando o filho é escrito, então `central.inquilino_id` é **imutável**: trocá-lo tornaria impossível, de uma vez, todo encontro, inscrição, cobrança, usuário, notificação e conexão já gravados abaixo dela, sem nada disparar. Central não muda de denominação — o histórico nasceu sob uma e continua dela.
 
 ---
 
