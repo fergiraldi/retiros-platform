@@ -291,6 +291,153 @@ export async function removerInquilinoSemeado(uow: UnidadeDeTrabalhoService, inq
   });
 }
 
+export interface ContasSemeadas {
+  /** `admin_central`, a única conta que grava `central_id` (RN-017). */
+  adminCentralId: string;
+  /** `admin_denominacao`, escopo do inquilino inteiro, sem central. */
+  adminDenominacaoId: string;
+  /** `servo`, com `pessoa_id` obrigatório e sem central. */
+  servoId: string;
+  /** `operador`, sem `inquilino_id` — a única conta fora de um inquilino. */
+  operadorId: string;
+  /** Uma conta por situação não-ativa, para a RN-018. */
+  porSituacao: Record<'convidada' | 'suspensa' | 'revogada', string>;
+  /** Os e-mails, que são a chave de resolução da sessão (RN-017). */
+  emails: {
+    adminCentral: string;
+    adminDenominacao: string;
+    servo: string;
+    operador: string;
+    convidada: string;
+    suspensa: string;
+    revogada: string;
+  };
+}
+
+/**
+ * As variantes de conta que `semearInquilinoCompleto` não cria — ele semeia uma
+ * `servo` ativa, que é o que as specs de isolamento precisam. A autenticação
+ * (item 5) precisa de uma de cada papel e de uma de cada situação.
+ *
+ * Helper à parte, e não campos novos no semeador principal, de propósito: cinco
+ * specs consomem `InquilinoSemeado` na forma atual, e mudá-la para atender a
+ * este caso mexeria em teste que não tem nada a ver com autenticação.
+ */
+export async function semearContas(
+  uow: UnidadeDeTrabalhoService,
+  semeado: InquilinoSemeado,
+  prefixo: string,
+): Promise<ContasSemeadas> {
+  const { inquilinoId, centralId, pessoaId } = semeado;
+
+  const emails = {
+    adminCentral: `admin-central-${prefixo}@example.com`,
+    adminDenominacao: `admin-denom-${prefixo}@example.com`,
+    servo: `servo2-${prefixo}@example.com`,
+    operador: `operador-${prefixo}@example.com`,
+    convidada: `convidada-${prefixo}@example.com`,
+    suspensa: `suspensa-${prefixo}@example.com`,
+    revogada: `revogada-${prefixo}@example.com`,
+  };
+
+  const contas = await uow.executar(
+    { inquilinoId, papel: 'admin_denominacao' },
+    async (tx: Tx) => {
+      const inserir = async (valores: typeof schema.usuario.$inferInsert) => {
+        const [linha] = await tx.insert(schema.usuario).values(valores).returning();
+        return linha.id;
+      };
+
+      return {
+        adminCentralId: await inserir({
+          id: randomUUID(),
+          inquilinoId,
+          centralId,
+          email: emails.adminCentral,
+          papel: 'admin_central',
+          situacao: 'ativa',
+        }),
+        adminDenominacaoId: await inserir({
+          id: randomUUID(),
+          inquilinoId,
+          email: emails.adminDenominacao,
+          papel: 'admin_denominacao',
+          situacao: 'ativa',
+        }),
+        // `usuario_servo_com_pessoa` exige pessoa_id; sem central, porque a
+        // pessoa é do inquilino e não da central (RN-014).
+        servoId: await inserir({
+          id: randomUUID(),
+          inquilinoId,
+          pessoaId,
+          email: emails.servo,
+          papel: 'servo',
+          situacao: 'ativa',
+        }),
+        porSituacao: {
+          convidada: await inserir({
+            id: randomUUID(),
+            inquilinoId,
+            email: emails.convidada,
+            papel: 'admin_central',
+            centralId,
+            situacao: 'convidada',
+          }),
+          suspensa: await inserir({
+            id: randomUUID(),
+            inquilinoId,
+            email: emails.suspensa,
+            papel: 'admin_central',
+            centralId,
+            situacao: 'suspensa',
+          }),
+          revogada: await inserir({
+            id: randomUUID(),
+            inquilinoId,
+            email: emails.revogada,
+            papel: 'admin_central',
+            centralId,
+            situacao: 'revogada',
+          }),
+        },
+      };
+    },
+  );
+
+  // A conta de operador tem `inquilino_id` nulo, e a restritiva
+  // `usuario_inquilino` só mostra (e aceita) linha assim quando o contexto já é
+  // `papel = 'operador'` — daí a segunda transação, com contexto próprio.
+  const operadorId = await uow.executar({ papel: 'operador' }, async (tx: Tx) => {
+    const [linha] = await tx
+      .insert(schema.usuario)
+      .values({
+        id: randomUUID(),
+        email: emails.operador,
+        papel: 'operador',
+        situacao: 'ativa',
+      })
+      .returning();
+    return linha.id;
+  });
+
+  return { ...contas, operadorId, emails };
+}
+
+/**
+ * Remove o que `semearContas` criou. As contas do inquilino saem junto em
+ * `removerInquilinoSemeado` (que apaga `usuario` por `inquilino_id`), mas a de
+ * operador **não** — ela não tem inquilino, e ficaria para trás disputando o
+ * índice `usuario_operador_unico` com a execução seguinte da suíte.
+ */
+export async function removerContasSemeadas(
+  uow: UnidadeDeTrabalhoService,
+  contas: ContasSemeadas,
+) {
+  await uow.executar({ papel: 'operador' }, async (tx) => {
+    await tx.execute(sql`delete from usuario where id = ${contas.operadorId}`);
+  });
+}
+
 /**
  * As 13 tabelas com `inquilino_id` cujo isolamento é "ninguém de fora enxerga,
  * ponto" — fora `inquilino` (fronteira é o próprio id, testado à parte),

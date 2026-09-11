@@ -51,7 +51,16 @@ export type CodigoErro =
   /** Conexão de recebimento indisponível (RN-098, PRD.md) — a RN-098 muda o
    *  desfecho conforme o endpoint (inscrição segue aceita; cobrança nova é
    *  que fica bloqueada), revisar contra a regra ao implementar o item 9/11. */
-  | 'RECEBIMENTO_INDISPONIVEL';
+  | 'RECEBIMENTO_INDISPONIVEL'
+  /** Conta existe no escopo do host, mas a `situacao` não é `ativa` — convidada
+   *  que nunca ativou, suspensa ou revogada (RN-018, PRD §8.1 passo 3). Vale no
+   *  ato: a sessão viva não é confiada, então é conferido a cada requisição. */
+  | 'CONTA_INATIVA'
+  /** Travessia por host (RN-060t): JWT válido cuja conta pertence a outro
+   *  escopo que não o inquilino resolvido pelo host. Não é 404 como em RN-215,
+   *  porque aqui não há recurso cuja existência esconder — o portador do token
+   *  já sabe das próprias contas. Acompanha alerta de segurança. */
+  | 'VINCULO_INVALIDO';
 
 /**
  * Status HTTP de cada código, para quem lançar `ErroDeDominio` nunca precisar
@@ -76,4 +85,6 @@ export const CATALOGO_ERROS: Record<CodigoErro, HttpStatus> = {
   PAGAMENTO_RECUSADO: HttpStatus.PAYMENT_REQUIRED,
   ENCONTRO_INCOMPLETO: HttpStatus.UNPROCESSABLE_ENTITY,
   RECEBIMENTO_INDISPONIVEL: HttpStatus.SERVICE_UNAVAILABLE,
+  CONTA_INATIVA: HttpStatus.FORBIDDEN,
+  VINCULO_INVALIDO: HttpStatus.FORBIDDEN,
 };

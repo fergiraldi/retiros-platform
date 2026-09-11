@@ -36,9 +36,9 @@ export const pessoaDadoSensivel = pgTable("pessoa_dado_sensivel", {
 			foreignColumns: [pessoa.id],
 			name: "pessoa_dado_sensivel_pessoa_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("pessoa_dado_sensivel_sem_operador", { as: "restrictive", for: "all", to: ["public"], using: sql`(COALESCE(app_papel(), ''::text) <> 'operador'::text)`, withCheck: sql`(COALESCE(app_papel(), ''::text) <> 'operador'::text)`  }),
-	pgPolicy("pessoa_dado_sensivel_central", { as: "permissive", for: "all", to: ["public"] }),
+	pgPolicy("pessoa_dado_sensivel_central", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
 	pgPolicy("pessoa_dado_sensivel_inquilino", { as: "restrictive", for: "all", to: ["public"] }),
+	pgPolicy("pessoa_dado_sensivel_sem_operador", { as: "restrictive", for: "all", to: ["public"] }),
 ]);
 
 export const pessoa = pgTable("pessoa", {
@@ -115,8 +115,8 @@ export const acessoSuporte = pgTable("acesso_suporte", {
 			foreignColumns: [inquilino.id],
 			name: "acesso_suporte_inquilino_id_fkey"
 		}),
-	pgPolicy("acesso_suporte_inquilino", { as: "restrictive", for: "all", to: ["public"], using: sql`(inquilino_id = app_inquilino_id())`, withCheck: sql`(inquilino_id = app_inquilino_id())`  }),
-	pgPolicy("acesso_suporte_central", { as: "permissive", for: "all", to: ["public"] }),
+	pgPolicy("acesso_suporte_central", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	pgPolicy("acesso_suporte_inquilino", { as: "restrictive", for: "all", to: ["public"] }),
 	check("acesso_suporte_prazo_maximo", sql`expira_em <= (criado_em + '24:00:00'::interval)`),
 ]);
 
@@ -216,8 +216,8 @@ export const inquilino = pgTable("inquilino", {
 	atualizadoEm: timestamp("atualizado_em", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	unique("inquilino_slug_key").on(table.slug),
-	pgPolicy("inquilino_visibilidade", { as: "restrictive", for: "all", to: ["public"], using: sql`((id = app_inquilino_id()) OR (app_papel() = 'operador'::text) OR ((app_inquilino_id() IS NULL) AND (app_central_id() IS NULL) AND (app_papel() IS NULL)))`, withCheck: sql`(app_papel() = 'operador'::text)`  }),
-	pgPolicy("inquilino_base", { as: "permissive", for: "all", to: ["public"] }),
+	pgPolicy("inquilino_base", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	pgPolicy("inquilino_visibilidade", { as: "restrictive", for: "all", to: ["public"] }),
 	check("inquilino_ativo_tem_contrato", sql`(situacao = 'em_implantacao'::situacao_inquilino) OR (contrato_aceito_em IS NOT NULL)`),
 	check("inquilino_slug_formato", sql`slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text`),
 	check("inquilino_taxa_plataforma_percentual_check", sql`(taxa_plataforma_percentual >= (0)::numeric) AND (taxa_plataforma_percentual <= (100)::numeric)`),
@@ -241,13 +241,13 @@ export const inquilinoDominio = pgTable("inquilino_dominio", {
 			name: "inquilino_dominio_inquilino_id_fkey"
 		}),
 	unique("inquilino_dominio_dominio_key").on(table.dominio),
-	pgPolicy("inquilino_dominio_exclusao_do_proprio_inquilino", { as: "restrictive", for: "delete", to: ["public"], using: sql`(inquilino_id = app_inquilino_id())` }),
-	pgPolicy("inquilino_dominio_atualizacao_do_proprio_inquilino", { as: "restrictive", for: "update", to: ["public"] }),
-	pgPolicy("inquilino_dominio_insercao_do_proprio_inquilino", { as: "restrictive", for: "insert", to: ["public"] }),
-	pgPolicy("inquilino_dominio_leitura_publica", { as: "permissive", for: "select", to: ["public"] }),
+	pgPolicy("inquilino_dominio_atualizacao_do_proprio_inquilino", { as: "restrictive", for: "update", to: ["public"], using: sql`(inquilino_id = app_inquilino_id())`, withCheck: sql`(inquilino_id = app_inquilino_id())`  }),
+	pgPolicy("inquilino_dominio_escrita_liberada", { as: "permissive", for: "insert", to: ["public"] }),
 	pgPolicy("inquilino_dominio_escrita_liberada_del", { as: "permissive", for: "delete", to: ["public"] }),
 	pgPolicy("inquilino_dominio_escrita_liberada_upd", { as: "permissive", for: "update", to: ["public"] }),
-	pgPolicy("inquilino_dominio_escrita_liberada", { as: "permissive", for: "insert", to: ["public"] }),
+	pgPolicy("inquilino_dominio_exclusao_do_proprio_inquilino", { as: "restrictive", for: "delete", to: ["public"] }),
+	pgPolicy("inquilino_dominio_insercao_do_proprio_inquilino", { as: "restrictive", for: "insert", to: ["public"] }),
+	pgPolicy("inquilino_dominio_leitura_publica", { as: "permissive", for: "select", to: ["public"] }),
 ]);
 
 export const encontro = pgTable("encontro", {
@@ -597,6 +597,7 @@ export const usuario = pgTable("usuario", {
 	revogadaEm: timestamp("revogada_em", { withTimezone: true, mode: 'string' }),
 	motivoRevogacao: text("motivo_revogacao"),
 }, (table) => [
+	uniqueIndex("usuario_operador_unico").using("btree", sql`lower(email)`).where(sql`(papel = 'operador'::papel_usuario)`),
 	foreignKey({
 			columns: [table.centralId],
 			foreignColumns: [central.id],
@@ -618,6 +619,7 @@ export const usuario = pgTable("usuario", {
 	check("usuario_denominacao_sem_central", sql`(papel <> 'admin_denominacao'::papel_usuario) OR (central_id IS NULL)`),
 	check("usuario_operador_sem_inquilino", sql`(papel = 'operador'::papel_usuario) = (inquilino_id IS NULL)`),
 	check("usuario_servo_com_pessoa", sql`(papel <> 'servo'::papel_usuario) OR (pessoa_id IS NOT NULL)`),
+	check("usuario_situacao_valida", sql`situacao = ANY (ARRAY['convidada'::text, 'ativa'::text, 'suspensa'::text, 'revogada'::text])`),
 ]);
 
 export const auditoria = pgTable("auditoria", {

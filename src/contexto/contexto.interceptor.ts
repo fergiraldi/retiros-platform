@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { from, lastValueFrom, Observable } from 'rxjs';
+import type { ContaDeAcesso } from '../autenticacao/autenticacao.types';
 import type { ContextoRequisicao, HostReconhecido } from './contexto.types';
 import { UnidadeDeTrabalhoService } from './unidade-de-trabalho.service';
 
@@ -28,6 +29,13 @@ export interface RequisicaoComContexto extends Request {
    * `em_implantacao` (CA-34).
    */
   hostResolvido?: HostReconhecido;
+  /**
+   * A conta que o `AutenticacaoGuard` resolveu, pelo mesmo motivo de
+   * `hostResolvido`: nada disto é GUC. `id` é o `auditoria.ator_id` do item 18 e
+   * `situacao` já foi conferida pelo guard — quem lê aqui não precisa reconferir.
+   * Acesso pelo `@ContaAtual()`, não por `req` direto.
+   */
+  contaAutenticada?: ContaDeAcesso;
 }
 
 /**
