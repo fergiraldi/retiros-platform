@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `develop` é a branch de trabalho que o ambiente `hom` da Railway segue;
+    # `main` é a que `prod` segue. Sem `develop` aqui, o push que dispara o
+    # deploy de `hom` chegaria lá sem nenhum teste ter rodado — e o "Wait for
+    # CI" da Railway não teria check nenhum para esperar.
+    branches: [main, develop]
   pull_request:
 
 jobs:
