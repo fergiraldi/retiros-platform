@@ -110,8 +110,47 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   GUCs de contexto devolve **0 linhas** sob `app_dev`. O isolamento do RNF-001 vale hoje. O
   que falta é a defesa em profundidade por privilégio: separar quem lê `identidade` e impedir
   que a role de runtime altere as próprias policies.
-- **Status**: aberto. Esforço estimado: 6-12h (parte do item 5 de
-  próximos-passos.md, autenticação/autorização).
+- **Status**: aberto, **adiado por decisão de 07/09/2026** — fica como está até a migração
+  para produção, quando será verificado antes do go-live. Não é esquecimento: o isolamento do
+  RNF-001 já vale (ver acima), e o que falta é defesa em profundidade por privilégio. Esforço
+  estimado: 6-12h, mais a coordenação de infraestrutura abaixo.
+
+**Levantamento de 07/09/2026 — duas complicações que a spec não previu**
+
+- **Roles no Postgres são globais ao cluster, não por schema.** Os quatro ambientes são
+  schemas do mesmo banco Supabase, com uma role por ambiente (`app_dev`, `app_ci`, `app_hom`,
+  `app_prod`). Um `app_api` único atravessaria dev, ci, hom e prod, destruindo o isolamento
+  atual — a spec assumiu, implicitamente, um banco por ambiente. São **quatro** roles novas
+  (`app_api_dev`, `app_api_ci`, `app_api_hom`, `app_api_prod`), não uma.
+- **`app_publico` não tem desenho.** Aparece **uma única vez** no repositório inteiro, no
+  `revoke all on identidade from app_api, app_publico` de `01-modelo-de-dados.md`. Nenhuma
+  spec diz o que ela é, quando é usada ou o que a distingue de `app_api`. Antes de criá-la,
+  decidir se ela existe — se a área pública e a autenticada usarem a mesma role, o `revoke`
+  dela é letra morta permanente.
+
+**O que precisa acontecer, quando for a hora**
+
+1. Decidir a nomeação por ambiente (o primeiro ponto acima) — arquitetura, não execução.
+2. Criar as roles **como `postgres`**, pelo SQL Editor do Supabase: `app_dev` tem
+   `rolcreaterole = false` e não cria role nenhuma. É o acesso que falta hoje.
+3. Conceder o mínimo: `usage` no schema, DML nas tabelas de domínio, `execute` nas funções e
+   `alter default privileges` para as tabelas futuras — com as duas restrições que são o
+   objetivo: **nada** em `identidade` (RN-124) e só `insert`/`select` em `auditoria` (RN-138).
+4. Trocar a connection string da aplicação para a role de runtime. Isso implica **duas URLs
+   por ambiente** — runtime e owner —, porque `db:migrate` continua exigindo o dono do schema.
+   Hoje há uma `DATABASE_URL` só, usada pelos dois. **É o passo de risco**: errar um grant
+   derruba a aplicação inteira, e só aparece no deploy.
+5. A 0002 não precisa mudar: o bloco condicional passa a encontrar as roles e executa sozinho.
+
+**O obstáculo registrado na 0002 desaparece com a separação**: o comentário dela diz que
+revogar `identidade` "quebraria a própria `security definer`". Quebraria enquanto owner e
+runtime são a mesma role — `resolver_identidade` é `security definer` e roda como o **owner**,
+que mantém o acesso. Com a separação, o owner continua lendo `identidade` e a role de runtime
+não, que é exatamente o que a RN-124 pede. O desenho funciona.
+
+**Caminho recomendado**: fazer primeiro em `dev` de ponta a ponta — criar a role, aplicar os
+grants, trocar a URL local e rodar a suíte inteira — e só replicar para os outros ambientes
+depois que os testes passarem sob a role restrita.
 
 ---
 
@@ -150,9 +189,24 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   toda rota não isenta responde `404` de qualquer forma, sem distinguir a causa. Mede-se
   comparando `req.hostname` com o `Host` enviado, na primeira rota de domínio que existir.
 
-### `X-Forwarded-Host` não é protegido pelo hop-count do `trust proxy`
+### ~~`X-Forwarded-Host` não é protegido pelo hop-count do `trust proxy`~~
 
-- **Descrição**: `src/main.ts` liga `app.set('trust proxy', ambiente.PROXIES_CONFIAVEIS)`, sem
+- **Status**: **resolvido em 07/09/2026** — não havia ação de infraestrutura pendente: a
+  topologia da Railway **já** garante a entrada única pelo edge. Verificado no projeto: um
+  único serviço (sem vizinho na rede privada), um único domínio do tipo `service` servido pelo
+  edge HTTP, e nenhum TCP proxy publicado. O container não tem IP público, então de fora só se
+  chega pelo proxy, que sempre injeta `X-Forwarded-*`.
+- **O que ficou registrado, e onde**: a garantia vem da topologia, não do código, e por isso
+  virou seção própria no `README.md` ("O edge da Railway é o único caminho de entrada") — com
+  as **duas mudanças que a reabrem** e que nada sinaliza: acrescentar um segundo serviço ao
+  projeto, que passa a falar com `*.railway.internal` sem passar pelo edge, ou expor um TCP
+  proxy. Se qualquer uma entrar no ar, o guard tem de passar a exigir a marca do proxy na
+  requisição em vez de confiar na topologia.
+- **Descartada por ora**: a trava em código (rejeitar, em produção, requisição sem
+  `X-Forwarded-*`). Fecharia o vetor sem depender de vigilância, mas mexe no caminho de toda
+  requisição para um risco cujo ganho é a área pública do outro inquilino — a mesma que o
+  navegador já alcança. Fica como a resposta pronta para o dia em que a topologia mudar.
+- **Diagnóstico original**: `src/main.ts` liga `app.set('trust proxy', ambiente.PROXIES_CONFIAVEIS)`, sem
   o que `req.hostname` ignoraria `X-Forwarded-Host` e a resolução por host receberia o host
   interno do container na Railway. Só que o número de saltos do Express protege
   `X-Forwarded-For`, **não** `X-Forwarded-Host`: quem alcançar o processo sem passar pelo
@@ -162,9 +216,8 @@ levantamento de gap da Fase 1 (ver [proximos-passos.md](proximos-passos.md)).
   `usuario.inquilino_id` contra o host resolvido, com `403` na divergência, então a travessia
   não alcança dado autenticado de outro inquilino. O que se ganha forjando é o mesmo que se
   ganha visitando o subdomínio do outro inquilino pelo navegador: a área pública dele.
-- **Status**: aberto. A mitigação é de infraestrutura, não de código — garantir que a Railway
-  seja o único caminho de entrada do processo. Revisitar no item 5 (autenticação), que é
-  quando a RN-060t sai do papel.
+- **Revisitar no item 5** (autenticação), que é quando a RN-060t sai do papel e passa a ser a
+  proteção efetiva do lado autenticado.
 
 ### ~~Semente de desenvolvimento existe no banco, mas não é reproduzível~~
 
@@ -286,6 +339,205 @@ real (itens 5, 5b e 18 de [proximos-passos.md](proximos-passos.md)).
   genérico de RLS. Melhor diagnóstico para quem esbarrar nisso.
 - **Coberto por teste**: troca recusada, edição de outro campo passando, e reescrever o mesmo
   `inquilino_id` passando — `is distinct from`, não `<>`, para não confundir reescrita com troca.
+
+---
+
+## Item 5 — autenticação Supabase JWT (07/09/2026)
+
+O que a autenticação deixou de fora de propósito. O item 5b (convite/ativação/revogação, F8)
+**não** entra aqui: foi adiado por decisão de 07/09/2026 até o item 19 (e-mail) existir, porque
+RN-018 manda o link de convite por e-mail e F8 sem canal de entrega não fecha.
+
+### ~~Nenhum contexto consegue perguntar "este e-mail tem conta em outro inquilino?"~~
+
+- **Status**: **resolvido em 07/09/2026 mudando o desfecho, não o mecanismo.** Token válido sem
+  conta no host resolvido responde `403 VINCULO_INVALIDO` com alerta, sem distinguir "conta em
+  outro inquilino" de "e-mail sem conta nenhuma". Satisfaz o `403` que CA-24c exige e cabe no
+  "401/403" que PRD §8.1 passo 3 admite.
+- **O que foi medido**, porque o desenho original supunha o contrário: uma função
+  `security definer` **não** contorna a RLS aqui. `security definer` roda como a dona da tabela,
+  e `force row level security` (RN-057t) alcança a dona — `select count(*) from usuario` sem os
+  GUCs devolve **0 linhas** sob `app_dev`. `set row_security = off` é recusado com `42501`, que é
+  o `force` fazendo o que existe para fazer, e nenhuma role tem `BYPASSRLS`. A restritiva
+  `usuario_inquilino` é `inquilino_id = app_inquilino_id()`: **nenhum valor de GUC atravessa**.
+- **Por que isso é a arquitetura funcionando, e não um obstáculo**: a pergunta era, ela mesma, a
+  sondagem cross-inquilino que a RN-052t proíbe ("não existe papel que leia dado de participante
+  de dois inquilinos, nem o operador"). A primeira versão da `0008` trazia um
+  `existe_conta_fora_do_escopo` para fazê-la; foi descartado antes de sair da máquina.
+- **O que ficou no lugar**: a resolução da conta é consulta comum sob contexto deliberadamente
+  elevado — `{ inquilino do host, admin_denominacao }`, ou `{ operador }` na rota do operador —,
+  no idioma que `test/ajuda/semear.ts` já usava para escrever a linha de `inquilino`. **Quem
+  segura a elevação é a RLS, não o código**: sob aquele contexto a travessia continua barrada
+  (medido: escrita em nome de outro inquilino é recusada com `42501`), e
+  `test/conta-de-acesso.spec.ts` tem prova dedicada de que a linha de A não aparece no contexto
+  de B nem numa consulta sem filtro de inquilino.
+- **A consequência que sobra**, e é aceitável: quem tem JWT válido do projeto Supabase e nenhuma
+  conta em lugar nenhum recebe `403`, não `401`. Semanticamente é o certo — a requisição está
+  autenticada, falta autorização neste endereço.
+
+### Alerta da RN-060t só existe em log
+
+- **Descrição**: a travessia por host grava `Logger.warn` com prefixo `RN-060t` (host, tipo,
+  inquilino do host e o `sub` do JWT — nunca o e-mail, que é dado pessoal). Não há linha em
+  `auditoria`, e o log não é estruturado.
+- **Impacto**: o alerta existe para quem estiver olhando o console no momento. Não é
+  pesquisável, não sobrevive ao ciclo do container na Railway, e não aparece em nenhum relatório.
+- **Status**: aberto, e por dependência declarada. Log estruturado com request-id é o item 7;
+  auditoria efetiva é o item 18 (que depende deste). Quando o 18 chegar, o alerta ganha
+  `ator_tipo` e `motivo` na `auditoria`. Esforço desprezível dentro do 18 — é lembrar.
+
+### `app.pessoa_id` é gravado para conta `servo` e continua sem consumidor
+
+- **Descrição**: o papel efetivo da conta `servo` leva `pessoaId`, e a `UnidadeDeTrabalho` grava
+  `app.pessoa_id` como sempre gravou. Só que não existe `app_pessoa_id()` no banco, nem policy
+  que leia o GUC — o que o item 5 mudou foi passar a preencher um contexto que ninguém consulta.
+- **Impacto**: nenhum hoje. A conta `servo` entra com `papel = 'servo'` e vê o que a RLS de
+  `servo` permite, que é o escopo do inquilino sem central.
+- **Status**: aberto. Nasce quando F5 (Fase 2) e as rotas de encontro do item 20 precisarem que
+  o servo veja **as inscrições da própria pessoa** — é lá que o GUC ganha função acessora e
+  policy, não antes. Criar a função agora seria adivinhar o predicado.
+
+### Papel de encontro (coordenador) não é derivado
+
+- **Descrição**: `papelEfetivoDaConta` (`src/autenticacao/papel-efetivo.ts`) resolve os quatro
+  papéis de escopo largo. Coordenador do encontro e de área (RN-025, RN-046) **não** são papel de
+  conta: vêm dos ponteiros do encontro que a requisição toca, e nenhuma rota informa um encontro
+  até o item 20.
+- **Impacto**: nenhum hoje — não há rota de encontro. Vira real na RN-035 e RN-036, que exigem
+  papel mínimo "coordenador do encontro" nos endpoints administrativos do item 20.
+- **Status**: aberto, com o lugar marcado. O JSDoc de `papel-efetivo.ts` diz explicitamente que a
+  promoção é **por requisição**, a partir do `encontroId` da rota — nunca no guard, que não sabe
+  qual encontro a rota vai tocar, e nunca em cache, porque RN-017 quer que "o poder termine no ato
+  em que o ponteiro muda".
+
+### ~~`usuario_unico` é sensível a caixa, e a resolução não~~
+
+- **Status**: **resolvido em 11/09/2026**, pela `migrations/0009_usuario_email_sem_caixa.sql`.
+  `usuario_unico` deixou de ser `unique (inquilino_id, email)` e virou
+  `create unique index usuario_unico on usuario (inquilino_id, lower(email))` — índice, não
+  constraint, porque o segundo termo é expressão. O mesmo e-mail em duas grafias diferentes não
+  cria mais duas contas no mesmo inquilino; a colisão vira erro de escrita (`23505`).
+- **Referência corrigida**: a versão anterior deste item citava "a spec (§4.15)" como o lugar
+  que publica a constraint. Impreciso — o DDL de `usuario` é `01-modelo-de-dados.md` §4.8;
+  §4.15 é seção de `PRD.md`, em prosa, sem DDL nenhum. A spec §4.8 foi atualizada junto.
+- **O que ainda falta, e não é este item**: normalizar o e-mail **na escrita** continua sendo
+  trabalho do 5b — o índice impede a colisão no banco, mas não normaliza o que a aplicação grava.
+
+### O `sub` do JWT não é gravado em lugar nenhum
+
+- **Descrição**: o vínculo entre a conta e a identidade no provedor é **só o e-mail**, como a
+  RN-017 manda ("uma conta por par (inquilino, e-mail)"). Não há coluna `auth_user_id` em
+  `usuario`, e o `sub` é lido apenas para o alerta da RN-060t.
+- **Impacto**: duas consequências que a regra não escreve. Quem troca o e-mail no Supabase Auth
+  **perde o acesso em silêncio** — a conta continua lá, apontando para o endereço antigo. E um
+  e-mail abandonado, se reivindicado por outra pessoa no provedor, dá acesso à conta antiga.
+- **Status**: aberto, para decisão de produto, não de código. É consequência direta do desenho da
+  RN-017, e mudá-lo (gravar o `sub` no primeiro acesso e passar a resolver por ele) mudaria a
+  chave da conta — assunto do 5b, que é quem cria conta.
+
+### Confirmação de e-mail depende da configuração do projeto Supabase
+
+- **Descrição**: PRD §8.1 passo 2 manda ler "o e-mail verificado". O Supabase publica isso em
+  `user_metadata.email_verified`, e a claim **não é garantida** — projeto antigo, ou provedor de
+  login que não a devolve, chega sem ela. O verificador recusa quando vem explicitamente `false`
+  e **aceita quando vem ausente**, porque exigir `true` recusaria conta legítima.
+- **Impacto**: se a confirmação de e-mail estiver desligada no projeto Supabase, alguém pode se
+  cadastrar com o e-mail de outra pessoa, receber token sem confirmar, e entrar na conta dela.
+- **Status**: aberto, e é verificação de infraestrutura, não de código — conferir no painel de
+  Auth do projeto `vuiwjcaahfnxpzrrscsy` que a confirmação de e-mail está exigida, antes do
+  go-live.
+- **Correção de 11/09/2026 — a checagem do código é mais fraca do que este item dizia**: a
+  frase anterior ("o código já recusa o `false` explícito; o que falta é garantir que a claim
+  exista") subestima o problema. `user_metadata` vem de `raw_user_meta_data` no Supabase, que
+  **o próprio usuário grava** por `supabase.auth.updateUser({ data: ... })`. Ou seja, quem a
+  checagem deveria barrar pode sobrescrever a claim contra si mesma — a presença dela não
+  garante nada. O campo equivalente que o usuário **não** escreve é `app_metadata`. Enquanto a
+  confirmação não for exigida no painel, a proteção efetiva é zero, não parcial.
+
+### Fiação do novo `APP_GUARD` sem cobertura ponta a ponta
+
+- **Descrição**: irmão declarado dos dois itens de fiação que já esperam o item 23. O
+  `AutenticacaoGuard` estar registrado em `src/app.module.ts` **depois** do
+  `ResolvedorDeHostGuard` é o que faz a RN-060t possível, e nenhum teste unitário alcança a
+  ordem dessa lista.
+- **O que já está coberto**, para não superdimensionar: `test/sessao.controller.spec.ts` confere
+  pelo `Reflector` que o `SaudeController` mantém as três isenções (sem `@SemAutenticacao()` o
+  healthcheck responde `401` e o deploy nunca fica saudável) e que a `/api/sessao` **não** é
+  isenta. O que falta é a ordem dos guards e o preflight de CORS.
+- **Status**: aberto, no item 23 junto com os irmãos. Cenário mínimo: token válido de outro
+  inquilino devolve `403` por HTTP real, e inverter a ordem dos dois `APP_GUARD` reprova.
+
+---
+
+## Revisão pré-commit do item 5 (11/09/2026)
+
+Revisão adversarial do código de autenticação antes de ele ser versionado, em sete dimensões de
+risco. Os três itens abaixo foram **verificados à mão contra o banco**, não apenas relatados.
+A revisão ficou **incompleta**: a maior parte dos verificadores automáticos morreu por limite de
+sessão, então há achados plausíveis que ninguém confirmou nem refutou — listados no fim.
+
+### RLS de `usuario` permite escalonamento de privilégio
+
+- **Descrição**: a permissiva `usuario_central` libera a escrita com `(central_id IS NULL)`, e a
+  restritiva `usuario_inquilino` só confere o inquilino. Um `servo` do inquilino A, cujo contexto
+  tem `central_id` nulo, pode gravar uma linha `papel = 'admin_denominacao'` do próprio inquilino:
+  nenhuma das duas policies barra. Conferido em `pg_policies` no banco `dev`, não inferido do SQL.
+- **Não é regressão do item 5**: vem da `0001`, do template `rls_politicas_padrao`. O item 5
+  apenas passou a *depender* desta tabela para autorizar, o que transforma a folga em caminho de
+  escalonamento.
+- **Impacto**: nulo hoje — nada escreve em `usuario` fora de fixture, porque o fluxo de convite
+  não existe. É exatamente a armadilha que o **item 5b** vai pisar: a primeira rota que deixar
+  uma conta criar ou editar outra herda essa folga sem nada avisar.
+- **Status**: aberto, e é pré-requisito do 5b junto com a normalização de e-mail. A correção
+  provável é uma policy restritiva própria para `usuario`, que amarre o papel que se pode gravar
+  ao papel do contexto — não dá para resolver afrouxando a permissiva.
+
+### ~~A consulta que autentica faz Seq Scan~~
+
+- **Status**: **resolvido em 11/09/2026**, pela mesma `migrations/0009_usuario_email_sem_caixa.sql`
+  que fechou o item da caixa — os dois eram a mesma correção. Confirmado com `explain` sob
+  RLS: o plano deixou de ser `Seq Scan on usuario` e passou a `Bitmap Heap Scan` restrito por
+  `BitmapOr` de dois `Bitmap Index Scan on usuario_unico`, um por `inquilino_id = <host>` e um
+  por `inquilino_id IS NULL` (rota do operador) — a varredura deixa de cruzar a tabela inteira e
+  passa a ficar limitada às contas do inquilino da requisição.
+- **Nuance honesta, para não superclaimar**: o `lower(email)` não aparece como `Index Cond` nas
+  duas colunas — o planner usa só `inquilino_id` no índice e aplica `lower(email)` como filtro
+  sobre o conjunto já estreitado por ele. O ganho real e medido é a fronteira por inquilino, não
+  a busca binária pelo e-mail dentro dele; com o volume de contas por inquilino sendo pequeno na
+  Fase 1, isso já é o que importa.
+- **Também elimina o sorteio do `limit 1`** que a "gravidade alta" da revisão pré-commit do item
+  5 apontava: sem duas linhas com o mesmo e-mail em grafias diferentes, não há o que sortear.
+
+### JWKS fora do ar responde `401`, não `503`
+
+- **Descrição**: `createRemoteJWKSet` tem cache de 10 minutos e **não serve chave velha** —
+  passado o prazo, uma falha ao buscar o JWKS propaga. O erro cai no `catch` genérico de
+  `src/autenticacao/autenticacao.guard.ts`, que não distingue "token inválido" de "não consegui
+  buscar a chave": responde `401` com "Autenticação necessária", registra em `debug` e manda o
+  cliente renovar a sessão — ação que não resolve nada.
+- **Impacto**: indisponibilidade mascarada de erro do cliente. Toda rota autenticada passa a
+  recusar token legítimo, o `/saude` continua verde (não toca o JWKS), a taxa de erro aparece
+  como `4xx` e nada dispara alarme ou rollback. Não é falha de segurança: nenhum token ruim é
+  aceito.
+- **Status**: aberto. Separar, no `catch`, o erro de obtenção de chave (`ERR_JWKS_TIMEOUT`,
+  `ERR_JOSE_GENERIC`, erros de rede) do erro de verificação de token
+  (`ERR_JWS_SIGNATURE_VERIFICATION_FAILED`, `ERR_JWT_EXPIRED`, …) — os primeiros viram `503` com
+  log em `error`. O projeto já tem o idioma em `RECEBIMENTO_INDISPONIVEL`. Esforço: 1-2h.
+
+### Achados plausíveis que ficaram sem verificação
+
+Relatados pela revisão e **não** confirmados — a maioria dos verificadores morreu por limite de
+sessão. Ficam registrados para não se perderem; cada um precisa ser conferido antes de virar
+trabalho:
+
+- A conferência de `situacao` roda **antes** de `validarVinculo`, então uma conta inativa de
+  outro inquilino recebe `CONTA_INATIVA` e **não** dispara o alerta da RN-060t — apontado por
+  duas dimensões independentes, o que é sinal forte.
+- `exp` não é exigido: JWT sem a claim seria aceito e nunca expiraria.
+- `SUPABASE_JWT_AUDIENCIA` vazia não derruba o boot em produção, ao contrário das outras duas.
+- Quatro achados sobre testes que passariam sem provar o que nomeiam — o de confusão de
+  algoritmo passaria mesmo sem a opção `algorithms`, e o de `/api/sessao` só olha o handler
+  enquanto os guards leem handler **e** classe.
 
 ---
 

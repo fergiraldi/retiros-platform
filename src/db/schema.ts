@@ -598,6 +598,7 @@ export const usuario = pgTable("usuario", {
 	motivoRevogacao: text("motivo_revogacao"),
 }, (table) => [
 	uniqueIndex("usuario_operador_unico").using("btree", sql`lower(email)`).where(sql`(papel = 'operador'::papel_usuario)`),
+	uniqueIndex("usuario_unico").using("btree", sql`inquilino_id`, sql`lower(email)`),
 	foreignKey({
 			columns: [table.centralId],
 			foreignColumns: [central.id],
@@ -613,7 +614,6 @@ export const usuario = pgTable("usuario", {
 			foreignColumns: [pessoa.id],
 			name: "usuario_pessoa_id_fkey"
 		}),
-	unique("usuario_unico").on(table.inquilinoId, table.email),
 	pgPolicy("usuario_central", { as: "permissive", for: "all", to: ["public"], using: sql`((app_papel() = ANY ('{admin_denominacao}'::text[])) OR (central_id IS NULL) OR (central_id = app_central_id()))`, withCheck: sql`((app_papel() = ANY ('{admin_denominacao}'::text[])) OR (central_id IS NULL) OR (central_id = app_central_id()))`  }),
 	pgPolicy("usuario_inquilino", { as: "restrictive", for: "all", to: ["public"] }),
 	check("usuario_denominacao_sem_central", sql`(papel <> 'admin_denominacao'::papel_usuario) OR (central_id IS NULL)`),

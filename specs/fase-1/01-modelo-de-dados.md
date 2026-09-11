@@ -677,7 +677,6 @@ create table usuario (
   revogada_em        timestamptz,
   motivo_revogacao   text,
 
-  constraint usuario_unico unique (inquilino_id, email),
   constraint usuario_operador_sem_inquilino check (
     (papel = 'operador') = (inquilino_id is null)
   ),
@@ -688,6 +687,18 @@ create table usuario (
     papel <> 'servo' or pessoa_id is not null
   )
 );
+
+-- Unicidade por (inquilino, e-mail) — índice, não constraint, porque o
+-- segundo termo é expressão. Case-insensitive desde a 0009: o mesmo e-mail em
+-- duas grafias não cria duas contas no mesmo inquilino, e a resolução da
+-- sessão (que já compara sem caixa) nunca tem duas linhas para escolher.
+create unique index usuario_unico on usuario (inquilino_id, lower(email));
+
+-- Operador vive fora de inquilino (inquilino_id nulo), e UNIQUE do Postgres
+-- não considera duas linhas nulas iguais — o índice acima não o restringe.
+-- Índice parcial próprio, também case-insensitive (0008, RNF-001 §8.1).
+create unique index usuario_operador_unico on usuario (lower(email))
+  where papel = 'operador';
 ```
 
 A resolução da sessão (Supabase Auth) para a linha é pelo par (`inquilino_id`, e-mail verificado do JWT) — para a rota do operador, por (`papel = operador`, e-mail), sem `inquilino_id` (RNF-001, §8.1). `central_id` só é preenchido para `admin_central`; para `servo`, o que a conta enxerga vem das inscrições da pessoa, encontro a encontro, nunca de um `central_id` fixo na conta.

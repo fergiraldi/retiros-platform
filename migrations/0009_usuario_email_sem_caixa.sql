@@ -1,0 +1,48 @@
+-- 0009_usuario_email_sem_caixa.sql
+-- Fecha tres pendencias de uma vez (docs/pendencias-tecnicas.md — "usuario_unico
+-- e sensivel a caixa" e "A consulta que autentica faz Seq Scan", achada na
+-- revisao pre-commit do item 5):
+--
+--  1. `ResolvedorDeContaService.resolver` filtra por `lower(email)`, e nenhum
+--     indice de `usuario` serve esse predicado (`usuario_pkey`,
+--     `usuario_unico (inquilino_id, email)` sensivel a caixa,
+--     `usuario_operador_unico` parcial so para operador). Medido com
+--     `explain (analyze)` sob contexto de inquilino: `Seq Scan on usuario`.
+--     RN-018 proibe cache de conta, entao e varredura por requisicao
+--     autenticada — nao ha como amortizar.
+--  2. `usuario_unico unique (inquilino_id, email)`, da 0000, e sensivel a
+--     caixa, enquanto a resolucao compara `lower(email)` desde a 0008: o
+--     mesmo e-mail em duas grafias diferentes cria DUAS contas no mesmo
+--     inquilino.
+--  3. Com duas contas assim, `resolver()` (`limit 1`, sem `order by`) sorteia
+--     qual delas autentica — achado de gravidade alta na revisao pre-commit.
+--
+-- A correcao e uma so: trocar o unique por um indice sobre
+-- (inquilino_id, lower(email)). O indice serve a consulta (item 1), a
+-- colisao vira erro de escrita em vez de duas linhas (item 2), e sem duas
+-- linhas nao ha o que o `limit 1` sortear (item 3).
+--
+-- `app_inquilino_id()` e STABLE (conferido em pg_proc), entao o planner pode
+-- usar o indice mesmo com o predicado vindo da RLS via `using`, nao do WHERE
+-- explicito da consulta — a mesma razao por que os indices normais que
+-- sustentam RLS ja funcionam neste projeto.
+--
+-- Fica de fora, deliberadamente: o par (papel = 'operador', email) continua
+-- coberto por `usuario_operador_unico` (0008), indice parcial ja
+-- case-insensitive. `inquilino_id` nulo nao e igualado por UNIQUE nenhum no
+-- Postgres, entao os dois indices sao necessarios e nao se substituem.
+--
+-- Zero linhas em `usuario` hoje em todos os ambientes (conferido antes de
+-- escrever isto): a troca nao tem estoque para revalidar.
+--
+-- Nota a margem: os comentarios da 0008 citam "spec (§4.15)" para a origem
+-- do DDL de `usuario`. E impreciso — o DDL vive em
+-- specs/fase-1/01-modelo-de-dados.md §4.8; §4.15 e secao de PRD.md, prosa,
+-- sem DDL. Nao editado na 0008 (migration ja aplicada e com hash fixo — mudar
+-- o arquivo quebraria o `db:migrate` de quem ja rodou); registrado aqui para
+-- quem ler os dois comentarios lado a lado nao se confundir.
+
+alter table usuario drop constraint usuario_unico;
+--> statement-breakpoint
+
+create unique index usuario_unico on usuario (inquilino_id, lower(email));
