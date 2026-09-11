@@ -162,9 +162,11 @@ depois que os testes passarem sob a role restrita.
   `getAllAndOverride([getHandler(), getClass()])`, igual ao guard — marcar um controller
   inteiro com `@SemTransacao()` agora funciona, em vez de não surtir efeito em silêncio. O
   comentário do decorator foi ajustado junto, para os dois irmãos se descreverem igual.
-- **Sem teste dedicado**: nenhuma suíte cobre o `ContextoInterceptor` isoladamente hoje, e não
-  criei arquivo novo para isto. A fiação do decorator entra nos cenários do item 23, junto com
-  os do guard e do CORS.
+- **Sem teste dedicado, ainda**: o item 23 (`test/pipeline-http.spec.ts`) cobriu guard de host,
+  guard de autenticação e CORS por HTTP real, mas as duas rotas existentes (`/saude`,
+  `/api/sessao`) são `@SemTransacao()` — nenhuma delas exercita o `ContextoInterceptor`
+  de fato abrindo uma transação via HTTP. Continua faltando, e só vai ter onde nascer quando a
+  primeira rota de domínio (sem a isenção) existir — itens 10/11/20.
 
 ### ~~`PROXIES_CONFIAVEIS` ainda não foi configurado em hom/prod~~
 
@@ -251,20 +253,19 @@ depois que os testes passarem sob a role restrita.
 - **Efeito colateral bom**: destrava o bloqueio não-código "dados-semente de um inquilino
   piloto" de [proximos-passos.md](proximos-passos.md).
 
-### Guard e CORS não têm cobertura automatizada ponta a ponta
+### ~~Guard e CORS não têm cobertura automatizada ponta a ponta~~
 
-- **Descrição**: `test/reconhecedor-de-host.spec.ts`, `test/resolvedor-de-host.guard.spec.ts` e
-  `test/cors.spec.ts` são unitários, e `test/host-resolucao.spec.ts` cobre a resolução contra o
-  banco. O que **nenhum** teste cobre é a fiação: o `APP_GUARD` estar registrado em
+- **Status**: **resolvido em 11/09/2026**, pelo item 23 (`test/pipeline-http.spec.ts`, com o
+  helper `test/ajuda/app-teste.ts` que sobe a `AppModule` real via `Test.createTestingModule` e
+  bate nela com `supertest`). Os quatro cenários mínimos passam contra dois inquilinos semeados
+  de verdade: `/saude` responde `200` com `Host` desconhecido, host desconhecido em
+  `/api/sessao` devolve `404` no envelope de RNF-011, e o preflight `OPTIONS` distingue origem
+  reconhecida (recebe `Access-Control-Allow-Origin`) de origem desconhecida (não recebe).
+- **Descrição original**: `test/reconhecedor-de-host.spec.ts`, `test/resolvedor-de-host.guard.spec.ts`
+  e `test/cors.spec.ts` são unitários, e `test/host-resolucao.spec.ts` cobre a resolução contra o
+  banco. O que nenhum teste cobria era a fiação: o `APP_GUARD` estar registrado em
   `src/app.module.ts`, o `@SemResolucaoDeHost()` isentar o healthcheck de verdade, e o CORS
-  rodar antes do pipeline. Isso foi verificado só na mão, com `curl`, durante a implementação.
-- **Impacto**: alguém pode remover o `APP_GUARD`, ou o decorator do `SaudeController`, e a
-  suíte inteira continua verde. É a regressão mais cara possível — RNF-006 deixando de valer
-  sem ninguém notar.
-- **Status**: aberto. Depende do item 23 (infra de teste HTTP/e2e com supertest). Quando ele
-  chegar, os quatro cenários mínimos são: host conhecido resolve, host desconhecido dá `404`,
-  `/saude` responde com host desconhecido, e preflight de origem desconhecida não devolve
-  `Access-Control-Allow-Origin`.
+  rodar antes do pipeline — verificado só na mão, com `curl`, durante a implementação.
 
 ### `ReconhecedorDeHostService.esquecer()` não tem chamador
 
@@ -454,18 +455,31 @@ RN-018 manda o link de convite por e-mail e F8 sem canal de entrega não fecha.
   garante nada. O campo equivalente que o usuário **não** escreve é `app_metadata`. Enquanto a
   confirmação não for exigida no painel, a proteção efetiva é zero, não parcial.
 
-### Fiação do novo `APP_GUARD` sem cobertura ponta a ponta
+### ~~Fiação do novo `APP_GUARD` sem cobertura ponta a ponta~~
 
-- **Descrição**: irmão declarado dos dois itens de fiação que já esperam o item 23. O
+- **Status**: **resolvido em 11/09/2026**, pelo item 23 (`test/pipeline-http.spec.ts`). Token
+  válido da conta `admin_denominacao` de um inquilino, no host de outro, devolve `403
+  VINCULO_INVALIDO` por HTTP real (CA-24c); o mesmo token no host certo devolve `200` com o
+  papel efetivo — controle positivo que prova a cadeia `ResolvedorDeHostGuard` →
+  `AutenticacaoGuard` → `ContextoInterceptor` inteira, não só o guard isolado.
+- **Ressalva**: a inversão literal dos dois `APP_GUARD` em `src/app.module.ts` **não** é testada
+  dinamicamente — o Nest não expõe uma forma de reordenar `APP_GUARD` via `overrideProvider` sem
+  reescrever o módulo. O teste de `200` acima depende estruturalmente da ordem certa: invertida,
+  `req.hostResolvido` não existiria ainda quando `AutenticacaoGuard` rodasse, e o mesmo teste
+  passaria a falhar com `500` (o `Error` de fiação que o próprio guard já lança nesse caso) — não
+  em silêncio, mas também não por uma asserção dedicada à ordem.
+- **Verificado por mutação em 11/09/2026**, na revisão do item 23: com a ordem dos dois
+  `APP_GUARD` invertida à mão em `src/app.module.ts`, **4 dos 7 testes** de
+  `test/pipeline-http.spec.ts` caem com `500` (os de `404`, `401`, `200` e `403`); os 3 que
+  sobrevivem são `/saude` (isento de tudo) e os dois de CORS (middleware, roda antes dos guards).
+  A ressalva acima é honesta, mas a proteção é real — a suíte reprova a inversão, ainda que por
+  efeito colateral e não por asserção nomeada. `app.module.ts` foi restaurado e conferido
+  idêntico ao `HEAD` depois do experimento.
+- **Descrição original**: irmão declarado do item de fiação de guard/CORS acima. O
   `AutenticacaoGuard` estar registrado em `src/app.module.ts` **depois** do
-  `ResolvedorDeHostGuard` é o que faz a RN-060t possível, e nenhum teste unitário alcança a
-  ordem dessa lista.
-- **O que já está coberto**, para não superdimensionar: `test/sessao.controller.spec.ts` confere
-  pelo `Reflector` que o `SaudeController` mantém as três isenções (sem `@SemAutenticacao()` o
-  healthcheck responde `401` e o deploy nunca fica saudável) e que a `/api/sessao` **não** é
-  isenta. O que falta é a ordem dos guards e o preflight de CORS.
-- **Status**: aberto, no item 23 junto com os irmãos. Cenário mínimo: token válido de outro
-  inquilino devolve `403` por HTTP real, e inverter a ordem dos dois `APP_GUARD` reprova.
+  `ResolvedorDeHostGuard` é o que faz a RN-060t possível, e nenhum teste unitário alcançava a
+  ordem dessa lista — só `test/sessao.controller.spec.ts`, que conferia as isenções do
+  `SaudeController` pelo `Reflector`, sem HTTP real.
 
 ---
 
@@ -551,21 +565,24 @@ consulta a `pg_roles` deu razão à pendência, e o que de fato está pronto (ro
 `BYPASSRLS`, RLS alcançando a dona das tabelas) foi medido e registrado lá. Só o item abaixo
 é dívida de código nova.
 
-### `ZodValidationPipe` não é global e não tem teste de fiação
+### ~~`ZodValidationPipe` não é global e não tem teste de fiação~~
 
-- **Descrição**: o pipe (`src/validacao/zod-validation.pipe.ts`) tem teste unitário, mas
-  **não** está registrado como `APP_PIPE` em `src/app.module.ts` — os providers de lá são só
-  `APP_GUARD`, `APP_INTERCEPTOR` e `APP_FILTER`. O uso é por rota, `@Body(new
-  ZodValidationPipe(schema))`, como o próprio arquivo documenta. É decisão defensável, e
-  provavelmente a única possível: o schema muda por rota, e não existe pipe global sem schema.
-  O que falta não é o registro — é o que garanta que uma rota nova não passe sem validação.
-- **Impacto**: nulo hoje, porque não há controller de domínio nenhum. Vira real nos itens 10
-  e 20, quando o item 2 já estiver marcado "concluído" há tempo e ninguém for reler este
-  ponto: uma rota que esqueça o pipe aceita corpo arbitrário em silêncio, sem nada vermelho.
-- **Status**: aberto. Irmão do item "Guard e CORS não têm cobertura automatizada ponta a
-  ponta" — os dois são fiação que nenhum teste unitário alcança, e os dois se resolvem no
-  item 23 (supertest). Cenário mínimo: uma rota com corpo inválido devolve `400` no envelope
-  de RNF-011, não `201`.
+- **Status**: **resolvido em 11/09/2026**, pelo item 23 (`test/validacao-http.spec.ts`). Como
+  ainda não existe controller de domínio real que use o pipe, o teste roda contra uma rota só de
+  teste (`test/ajuda/rota-de-teste.controller.ts`, registrada só na `TestingModule`, nunca
+  importada de `src/`): corpo inválido devolve o envelope de RNF-011 com `DADOS_INVALIDOS` e o
+  detalhe por campo; corpo válido devolve `201` com o valor parseado.
+- **Correção sobre o texto anterior deste item**: o cenário mínimo dizia "devolve `400`" — o
+  status real de `DADOS_INVALIDOS` em `src/erros/codigos-erro.ts` é **`422`**
+  (`UNPROCESSABLE_ENTITY`), não `400`. O teste afirma o status real.
+- **O que continua em aberto**: o registro do pipe continua por rota (`@Body(new
+  ZodValidationPipe(schema))`), decisão defensável já registrada abaixo — o item 23 prova que o
+  mecanismo funciona quando aplicado, não que toda rota futura vá aplicá-lo. Vira real de novo
+  nos itens 10 e 20, quando a primeira rota de domínio nascer.
+- **Descrição original**: o pipe (`src/validacao/zod-validation.pipe.ts`) tinha teste unitário,
+  mas não estava registrado como `APP_PIPE` em `src/app.module.ts` — os providers de lá são só
+  `APP_GUARD`, `APP_INTERCEPTOR` e `APP_FILTER`. O uso é por rota, como o próprio arquivo
+  documenta: o schema muda por rota, e não existe pipe global sem schema.
 
 ---
 

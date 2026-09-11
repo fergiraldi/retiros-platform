@@ -19,7 +19,7 @@ domínio pra aplicar.
 
 **Estimativa total: 204 a 313 horas** de desenvolvimento (≈ 5 a 8 semanas de um dev
 full-time), sem contar os bloqueios não-código listados no fim deste documento. Desse
-total, **16 a 24 horas já saíram** com o item 5.
+total, **20 a 32 horas já saíram**, com os itens 5 e 23.
 
 ## O que já está pronto
 
@@ -75,7 +75,7 @@ total, **16 a 24 horas já saíram** com o item 5.
 | 20 | Endpoints administrativos (9 rotas de inscrição/cobrança) | 14-20 | 5, 10 |
 | 21 | Painel do operador + relatórios + exportação/exclusão LGPD | 12-18 | 20 |
 | 22 | Padrão de paginação | 4-6 | 2 |
-| 23 | Infra de teste HTTP/e2e (supertest) | 4-8 | 1 |
+| 23 | ~~Infra de teste HTTP/e2e (supertest)~~ — concluído | 4-8 | 1 |
 
 O item **5b** foi um achado da crítica de completude do levantamento original: a
 autenticação (item 5) só *lê* uma conta já ativa contra o JWT — não cria, convida,
@@ -89,6 +89,15 @@ alguém repassar à mão, que não é o fluxo que a regra descreve. Na prática 
 19, junto ou perto dele. As duas pré-condições dele que já estão levantadas — normalizar o e-mail
 na escrita (`usuario_unico` é sensível a caixa) e varrer o estoque de linhas contra a RN-051t —
 estão em [pendencias-tecnicas.md](pendencias-tecnicas.md).
+
+**O item 8 tem a mesma dependência oculta, e a tabela também não mostra** (achado de 11/09/2026,
+ao escolher o próximo item a atacar): `Depende de: 5, 2` é incompleto. O diagrama de onboarding
+de `00-multi-inquilino.md` §6 tem, como segundo passo, `Plataforma → Admin: convite por e-mail`
+— o mesmo mecanismo do 5b. Sem item 19, o onboarding não tem como convidar o primeiro
+`admin_denominacao` da denominação pelo fluxo que a spec descreve. Na prática, 8 está tão preso
+ao 19 quanto o 5b está — só que, ao contrário do 5b, isso nunca tinha sido escrito aqui. Vale
+revisitar quando o item 19 (ou uma redução de escopo do onboarding que dispense o convite) entrar
+em pauta, antes de estimar o item 8 como "pronto para começar" só porque 5 e 2 estão prontos.
 
 ## Bloqueios que não são código
 
