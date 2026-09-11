@@ -120,11 +120,13 @@ desenvolvimento, mas precisam ser resolvidos em paralelo:
   tela. O emissor tem 48 bytes, sem barra e sem espaço. A validação de boot foi executada com os
   valores reais de cada ambiente e `NODE_ENV=production`: passa nos dois. O JWKS responde com uma
   chave `ES256`, aceita pela lista de algoritmos. `hom` e `prod` seguem em `200` no `/saude`.
-- **A `migrations/0008` em `hom` e `prod`** — medido em 11/09/2026, **nenhum dos dois a tem**:
-  ambos estão em 8 de 9 migrations, sem o check, sem o índice e sem a função. Em `prod` é o
-  esperado, porque ele não recebe migration no deploy (`README.md`). Em `hom` seria automático,
-  mas **o item 5 ainda não foi commitado nem enviado**, então o deploy nunca viu a 0008 — o
-  que falta primeiro é versionar, não aplicar.
+- ~~**A `migrations/0008` em `hom` e `prod`**~~ — **resolvido em 11/09/2026**, e não pelo caminho
+  previsto. O item dizia que `prod` não recebia migration no deploy e que a `0008` teria de ser
+  aplicada à mão antes de promover. No mesmo dia `prod` passou a seguir a `main` na Railway, e o
+  pré-deploy de migration veio junto: o push do item 5 levou a `0008` e a `0009` para `prod`
+  sozinho (medido: `10/10` em `_migracoes`, última às 22:08:46, dentro da janela de
+  `DEPLOYING`). Os três ambientes estão em `10/10`. O fluxo atual — `develop` → `hom`, `main`
+  → `prod`, ambos aplicando migration no deploy — está no `README.md`.
 - **Confirmação de e-mail exigida no projeto Supabase** — o código recusa `email_verified: false`,
   mas a claim não é garantida; se o projeto não exigir confirmação, alguém entra com o e-mail de
   outra pessoa. Ver [pendencias-tecnicas.md](pendencias-tecnicas.md).
