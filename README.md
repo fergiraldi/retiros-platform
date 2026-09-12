@@ -27,20 +27,41 @@ Cobre o ciclo completo de um encontro: publicação na agenda, inscrição de pa
 
 Quatro schemas do mesmo banco Supabase, um por ambiente, cada um com sua role (`app_dev`, `app_ci`, `app_hom`, `app_prod` — nenhuma com `BYPASSRLS`). A aplicação recusa subir se `current_schema()` não bater com `DB_SCHEMA_ESPERADO`, o que protege contra `.env` trocado.
 
-| Ambiente | Onde | Deploy | Migrations |
-|---|---|---|---|
-| `dev` | local | — | `pnpm db:migrate` na mão; `pnpm db:seed` popula os inquilinos de teste |
-| `ci` | GitHub Actions | — | o próprio workflow aplica antes de rodar a suíte |
-| `hom` | Railway | automático a cada push em `main`, depois do CI passar | aplicadas no deploy |
-| `prod` | Railway | **promoção manual** | **não** saem no deploy — é um ato à parte |
+| Ambiente | Onde | Segue a branch | Deploy | Migrations |
+|---|---|---|---|---|
+| `dev` | local | a que estiver em uso | — | `pnpm db:migrate` na mão; `pnpm db:seed` popula os inquilinos de teste |
+| `ci` | GitHub Actions | `main`, `develop` e todo PR | — | o próprio workflow aplica antes de rodar a suíte |
+| `hom` | Railway | `develop` | automático a cada push, depois do CI passar | aplicadas no deploy |
+| `prod` | Railway | `main` | automático a cada merge, depois do CI passar | aplicadas no deploy |
 
-A assimetria entre `hom` e `prod` é deliberada: homologação acompanha `main` sozinha, produção só muda por decisão. O efeito colateral é que **`prod` fica para trás em silêncio se alguém esquecer o passo da migration** — foi assim que ele acumulou duas pendentes. Ao promover para produção, aplique-as no mesmo ato:
+### Fluxo de branches
 
-```sh
-DATABASE_URL=<url de prod> DB_SCHEMA_ESPERADO=prod pnpm db:migrate
+`develop` e `main` são as duas branches permanentes — irmãs, não mãe e filha; nenhuma é criada por tarefa nem apagada no merge. O trabalho do dia a dia acontece na `develop`; a `main` só recebe o que passa por pull request.
+
+```
+develop ──push──► CI ──► hom deploya ──► testar em hom
+                                              │
+                                     PR develop → main (CI verde exigido)
+                                              │
+                                     merge ──► CI ──► prod deploya
 ```
 
-`PROXIES_CONFIAVEIS` também difere por ambiente, e de propósito: `1` em `hom`/`prod`, que ficam atrás do proxy da Railway, e `0` no dev local, que fala direto com o processo.
+O merge cria um **commit de merge** na `main`, que contém os commits da `develop` — as duas nunca divergem e nada precisa ser ressincronizado. Não é rebase de propósito: o "Rebase and merge" do GitHub reescreve o SHA de cada commit, e a partir daí `develop` e `main` passam a ter históricos diferentes com o mesmo conteúdo, e cada PR seguinte mostra o histórico inteiro como mudança nova.
+
+O que segura o portão está no GitHub, não na convenção: a `main` tem ruleset exigindo PR, o check `build-and-test` verde e branch atualizada, sem force push nem exclusão; a `develop` tem ruleset contra force push e exclusão. O repositório só aceita merge commit, e "Automatically delete head branches" está **desligado** — ligado, ele apagaria a `develop` no primeiro merge e `hom` ficaria sem branch para seguir.
+
+Para promover:
+
+```sh
+gh pr create --base main --head develop --title "..." --body "..."
+gh pr merge --merge
+```
+
+Mergear a cada entrega pequena: o portão só vale se o que foi testado em `hom` for próximo do que vai para `prod`. Hotfix segue o mesmo caminho pela `develop`; corrigir direto na `main` (via PR) exige mergear a `main` de volta na `develop` no mesmo ato, senão o próximo merge reintroduz o defeito.
+
+O CI roda três vezes por ciclo, cada run guardando um portão: no push para `develop` (segura `hom`), no evento `pull_request` (segura o merge — é o único que o ruleset olha), e no push do commit de merge para `main` (segura `prod`, no commit exato que vai subir).
+
+`PROXIES_CONFIAVEIS` difere por ambiente, e de propósito: `1` em `hom`/`prod`, que ficam atrás do proxy da Railway, e `0` no dev local, que fala direto com o processo.
 
 ### O edge da Railway é o único caminho de entrada
 
