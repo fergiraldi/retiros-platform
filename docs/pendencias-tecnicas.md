@@ -547,7 +547,9 @@ trabalho:
 - A conferência de `situacao` roda **antes** de `validarVinculo`, então uma conta inativa de
   outro inquilino recebe `CONTA_INATIVA` e **não** dispara o alerta da RN-060t — apontado por
   duas dimensões independentes, o que é sinal forte.
-- `exp` não é exigido: JWT sem a claim seria aceito e nunca expiraria.
+- ~~`exp` não é exigido~~ — **confirmado e resolvido em 29/10/2026**: o `jose` só confere `exp`
+  quando a claim existe. `requiredClaims: ['exp']` no verificador, com teste que reprova sem ele
+  (conferido por mutação).
 - `SUPABASE_JWT_AUDIENCIA` vazia não derruba o boot em produção, ao contrário das outras duas.
 - Quatro achados sobre testes que passariam sem provar o que nomeiam — o de confusão de
   algoritmo passaria mesmo sem a opção `algorithms`, e o de `/api/sessao` só olha o handler
@@ -583,6 +585,57 @@ consulta a `pg_roles` deu razão à pendência, e o que de fato está pronto (ro
   mas não estava registrado como `APP_PIPE` em `src/app.module.ts` — os providers de lá são só
   `APP_GUARD`, `APP_INTERCEPTOR` e `APP_FILTER`. O uso é por rota, como o próprio arquivo
   documenta: o schema muda por rota, e não existe pipe global sem schema.
+
+---
+
+## Itens 6 e 10 — limite de taxa e ficha pública (29/10/2026)
+
+O que a área pública da F1 (`src/publico/`) deixou de fora, ou decidiu diferente da spec.
+
+### `409 JA_INSCRITO` não devolve o link de consulta
+
+- **Descrição**: CA-04 e 02-inscricao.md §2.3 pedem que a resposta traga "a situação da inscrição
+  existente e o link de consulta". A resposta traz só a `situacao`.
+- **Por quê**: o link carrega o `token_consulta`, que é credencial sem login (RN-133) — dá a
+  consulta e o cancelamento. A ficha é anônima e CPF não é segredo: devolver o token a quem digitou
+  o CPF de outra pessoa entregaria a inscrição dela. O caminho seguro é reenviar o link para o
+  e-mail **já cadastrado**, que depende do item 19.
+- **Status**: aberto, para decisão de produto. Corrigir o texto da spec e do CA-04, ou definir o
+  reenvio por e-mail junto do item 19.
+
+### Spec contraditória sobre inquilino suspenso
+
+- **Descrição**: 02-inscricao.md §2.1 diz "inquilino `suspenso`: `422 INSCRICOES_FECHADAS`"; a lista
+  de erros do §4.3 e o CA-37 dizem `503 INSCRICOES_SUSPENSAS`. O código segue o §4.3 e o CA-37.
+- **Status**: aberto — corrigir o §2.1.
+
+### Leituras públicas rodam sob contexto elevado
+
+- **Descrição**: agenda, página e a busca da central na ficha rodam sob `{ inquilino do host,
+  admin_denominacao }` (`contextoDeLeituraPublica`, `src/publico/encontros-publicos.service.ts`).
+  O contexto `publico` não enxerga `encontro` nem `central` sem central no contexto, e a contagem de
+  vagas precisa ler `inscricao`, que não pode ganhar policy pública.
+- **Impacto**: a fronteira do inquilino continua na RLS. Dentro do inquilino, "só `publicado`" e "só
+  colunas de divulgação" ficam por conta do SQL — esquecer o filtro mostraria um rascunho (CA-31).
+  As consultas são curtas, não escrevem, e o CA-31 tem teste.
+- **Status**: aceito. A alternativa, policies de leitura para `publico` em `encontro`/`central`, não
+  eliminaria a elevação, porque a contagem de vagas continua precisando dela.
+
+### Pendências menores da ficha
+
+- **Divergência de nome não gera alerta**: §2.2 passo 3 manda alertar a coordenação quando o nome
+  da ficha diverge do cadastro reaproveitado. Não há painel (RN-115) onde o alerta apareça. Nasce
+  com o item 21.
+- **Contato de emergência e estado civil não são atualizados** no reaproveitamento — §2.2 lista só
+  telefone, e-mail e endereço, e o código segue a lista. Confirmar se é intencional.
+- **Notificações ficam em `pendente`** até o item 19 existir. Nada as envia; quando o envio chegar,
+  as linhas já enfileiradas saem de uma vez.
+- **A criação não passa por `InscricaoService.transicionar`** (RN-200), porque ele ainda não existe.
+  Quando os itens 12, 14 e 15 trouxerem as transições, a criação deve entrar no mesmo serviço.
+- **Consentimento de retenção** grava `finalidades = ['retencao']` contra o termo vigente. O PRD
+  (RN-093a) diz que é linha própria, mas não fixa o nome da finalidade.
+- **O limitador é por processo** (`src/limite-de-taxa/`): com mais de uma réplica, o limite real
+  vira `limite × réplicas`. Hoje é uma réplica por ambiente.
 
 ---
 

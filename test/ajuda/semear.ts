@@ -272,12 +272,13 @@ export async function removerInquilinoSemeado(uow: UnidadeDeTrabalhoService, inq
     await tx.execute(sql`delete from auditoria where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from notificacao where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from cobranca where inquilino_id = ${inquilinoId}`);
+    // consentimento aponta para inscricao (o da ficha pública grava o ponteiro).
+    await tx.execute(sql`delete from consentimento where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from inscricao where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from encontro where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from acesso_suporte where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from conexao_gateway where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from inquilino_dominio where inquilino_id = ${inquilinoId}`);
-    await tx.execute(sql`delete from consentimento where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from termo where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from pessoa_dado_sensivel where inquilino_id = ${inquilinoId}`);
     await tx.execute(sql`delete from usuario where inquilino_id = ${inquilinoId}`);

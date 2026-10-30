@@ -10,16 +10,15 @@ A Fase 1 está longe de liberável. O que existe hoje é a fundação de platafo
 contexto transacional por request, RLS de dois níveis, as 17 tabelas de domínio,
 funções SQL e as 6 specs de teste de banco (isolamento, cobertura de RLS, contexto de
 transação, resolução por host, integridade do par inquilino/central, conta de acesso) — mais a
-autenticação e o papel efetivo (item 5). **Ainda não existe um único controller de
-domínio**: as duas rotas no ar são o healthcheck `GET /saude` e a `GET /api/sessao`, que
-devolve quem é a requisição. Zero integração com Mercado Pago, zero e-mail, zero cron. O
-envelope de erro (item 1) e o mecanismo de validação de payload (item 2, com Zod) já
-estão prontos — sem nenhum DTO de endpoint real ainda, porque não há controller de
-domínio pra aplicar.
+autenticação e o papel efetivo (item 5). Desde 29/10/2026 existe o **primeiro controller de
+domínio**: a área pública da F1 (item 10) — agenda, página do encontro e ficha de inscrição,
+com vaga sob lock, lista de espera e limite de taxa (item 6). A inscrição nasce sem cobrança.
+Zero integração com Mercado Pago, zero envio de e-mail (as notificações ficam enfileiradas em
+`pendente`), zero cron.
 
 **Estimativa total: 204 a 313 horas** de desenvolvimento (≈ 5 a 8 semanas de um dev
 full-time), sem contar os bloqueios não-código listados no fim deste documento. Desse
-total, **20 a 32 horas já saíram**, com os itens 5 e 23.
+total, **44 a 70 horas já saíram**, com os itens 5, 6, 10 e 23.
 
 ## O que já está pronto
 
@@ -47,6 +46,12 @@ total, **20 a 32 horas já saíram**, com os itens 5 e 23.
   login e o único cenário executável do CA-24c hoje
 - RN-018 valendo no ato: suspensão e revogação são conferidas a cada requisição, sem cache de
   conta (verificado à mão, sem reiniciar a API)
+- Área pública da F1 (`src/publico/`): `GET /api/publico/encontros`, `GET
+  /api/publico/encontros/:centralSlug/:encontroSlug` (com o termo vigente) e `POST
+  /api/publico/encontros/:encontroId/inscricoes` — identidade e pessoa (RN-010 a RN-014),
+  consentimento com IP (RN-090, RN-093a), vaga sob `for update` (RN-503, CA-15 com 50 fichas
+  simultâneas), lista de espera, notificação enfileirada e auditoria `publico`. Limite de taxa
+  por IP e por CPF (RN-210) em `src/limite-de-taxa/`. Coberto por `test/ficha-publica.spec.ts`
 
 ## Ordem de execução
 
@@ -58,11 +63,11 @@ total, **20 a 32 horas já saíram**, com os itens 5 e 23.
 | 4 | ~~Corrigir trigger de integridade em `usuario` (RN-051t)~~ — concluído | 2-3 | — |
 | 5 | ~~Autenticação Supabase JWT + papel efetivo~~ — concluído | 16-24 | 1, 3 |
 | 5b | Contas de acesso — convite, ativação, revogação (F8, RN-017 a RN-019) | 10-14 | 5, **19** |
-| 6 | Rate limit por IP e por CPF (RNF-012) | 8-14 | 1 |
+| 6 | ~~Rate limit por IP e por CPF (RNF-012)~~ — concluído (em memória) | 8-14 | 1 |
 | 7 | Logging estruturado + request-id | 6-10 | — |
 | 8 | Onboarding do inquilino F0 | 14-20 | 5, 2 |
 | 9 | Cliente HTTP Mercado Pago + OAuth | 14-20 | 8 |
-| 10 | Ficha de inscrição pública F1 | 16-24 | 2, 6, 3 |
+| 10 | ~~Ficha de inscrição pública F1~~ — concluído (agenda, página e ficha) | 16-24 | 2, 6, 3 |
 | 11 | Criação de cobrança Pix/cartão + split | 12-18 | 9, 10 |
 | 12 | Webhook: recepção + máquina de estados | 12-18 | 11 |
 | 13 | Consulta/edição da inscrição por token | 4-6 | 10 |
@@ -98,6 +103,15 @@ de `00-multi-inquilino.md` §6 tem, como segundo passo, `Plataforma → Admin: c
 ao 19 quanto o 5b está — só que, ao contrário do 5b, isso nunca tinha sido escrito aqui. Vale
 revisitar quando o item 19 (ou uma redução de escopo do onboarding que dispense o convite) entrar
 em pauta, antes de estimar o item 8 como "pronto para começar" só porque 5 e 2 estão prontos.
+
+**Somando as duas dependências ocultas, a tabela tem um ciclo** (achado de 29/10/2026): 9 depende
+de 8, 8 depende de 19, 19 depende de 11 e 11 depende de 9. Do jeito que está escrita, nenhum dos
+quatro começa. O nó é o item 19, que mistura duas coisas: o **envio de e-mail** em si (provedor,
+remetente com a marca do inquilino — RN-137 —, envio depois do commit e nova tentativa —
+RN-136), que não depende de nada, e as **notificações de cobrança**, que dependem do 11. Separado
+em 19a (transporte, sem dependência) e 19b (gatilhos de cobrança, depende de 11), o ciclo se
+desfaz: 19a destrava 5b e 8, e o resto segue a ordem. O 19a só espera a escolha do provedor de
+e-mail, que o PRD deixa em aberto.
 
 ## Bloqueios que não são código
 
