@@ -340,7 +340,27 @@ describe('Área pública — agenda, página e ficha de inscrição (PRD F1)', (
       await consultar(a, sql`select id from notificacao where gatilho = 'lista_espera_registrada'
         and inscricao_id in (select id from inscricao where encontro_id = ${encontro.id})`),
     ).toHaveLength(49);
-  }, 60_000);
+    // Folga para o CI: o runner fica longe do banco (~150 ms por ida), e as 50
+    // passam uma a uma pelo lock do encontro.
+  }, 120_000);
+
+  it('clique duplo: duas fichas do mesmo CPF novo ao mesmo tempo dão 201 e 409, nunca 500', async () => {
+    const encontro = await criarEncontro(a);
+    const cpf = gerarCpf();
+    let respostas!: Promise<request.Response[]>;
+
+    // Segura o encontro travado enquanto as duas chegam: assim as duas fazem
+    // juntas a parte de antes do lock, e a segunda chega a `resolver_identidade`
+    // com a identidade da primeira ainda sem commit — o pior caso. Sem o
+    // advisory lock por CPF, ela estoura `23505` quando a primeira termina.
+    await ctx.uow.executar({ inquilinoId: a.inquilinoId, papel: 'admin_denominacao' }, async (tx) => {
+      await tx.execute(sql`select id from encontro where id = ${encontro.id} for update`);
+      respostas = Promise.all([inscrever(hostA, encontro.id, ficha(cpf)), inscrever(hostA, encontro.id, ficha(cpf))]);
+      await new Promise((resolver) => setTimeout(resolver, 3_000));
+    });
+
+    expect((await respostas).map((r) => r.status).sort()).toEqual([201, 409]);
+  });
 
   it('CA-24d: o mesmo CPF em outra denominação recebe resposta idêntica e cadastro só com o que digitou', async () => {
     const encontroA = await criarEncontro(a);

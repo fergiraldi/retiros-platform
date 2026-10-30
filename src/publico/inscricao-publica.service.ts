@@ -27,20 +27,30 @@ export interface OrigemDaFicha {
   baseUrl: string;
 }
 
-type LinhaEncontroTravado = {
-  situacao: string;
-  janela_aberta: boolean;
+/** O que decide se o encontro aceita inscrição (RN-202, RN-063t). */
+const COLUNAS_DA_JANELA = sql`
+  e.situacao, i.situacao as situacao_inquilino,
+  (e.inscricoes_abrem_em <= now() and now() < e.inscricoes_fecham_em) as janela_aberta`;
+
+type LinhaJanela = { situacao: string; situacao_inquilino: string; janela_aberta: boolean };
+
+type LinhaEncontroTravado = LinhaJanela & {
   vagas_participantes: number;
   vagas_servos: number;
   taxa_participante: string;
   taxa_servo: string;
   reembolso_faixas: unknown;
-  situacao_inquilino: string;
   taxa_plataforma_percentual: string;
   taxa_repassada_ao_inscrito: boolean;
 };
 
-type LinhaFila = { ocupadas: number; ultima_posicao: number; na_fila: number };
+type LinhaFila = {
+  ocupadas: number;
+  ultima_posicao: number;
+  na_fila: number;
+  /** Situação da inscrição viva desta pessoa no encontro, se houver (RN-031). */
+  ja_inscrito: string | null;
+};
 
 /**
  * PRD F1, passos 3 a 6 — a ficha de inscrição pública (02-inscricao.md §2 e
@@ -83,22 +93,42 @@ export class InscricaoPublicaService {
     return this.uow.executar(
       { inquilinoId: origem.inquilinoId, centralId, papel: 'publico' },
       async (tx) => {
-        const encontro = await this.travarEncontro(tx, encontroId);
+        // Antes do lock: nada aqui depende da vaga, e cada ida ao banco feita
+        // com o encontro travado é espera de todo mundo na fila. Com a API na
+        // Railway (sem região na América do Sul) e o banco em São Paulo, cada
+        // uma custa ~150 ms — é o que faz a abertura de um encontro concorrido
+        // virar fila (RNF-013).
         const termo = await this.termoAceito(tx, consentimento);
         if (ficha.convidadorPessoaId) await this.exigirPessoaDoInquilino(tx, ficha.convidadorPessoaId);
-
         const pessoaId = await this.registrarPessoa(tx, ficha, centralId);
-        await this.recusarSeJaInscrito(tx, encontroId, pessoaId);
 
-        // 05-lista-de-espera.md §3: contagem sob o lock da linha do encontro,
-        // tomado em `travarEncontro` — a decisão e o insert são atômicos.
+        // Daqui ao commit o encontro está travado (RN-503): só a decisão da
+        // vaga e o que precisa nascer na mesma transação que a inscrição.
+        const encontro = await this.travarEncontro(tx, encontroId);
+
+        // 05-lista-de-espera.md §3: contagem sob o lock — decisão e insert
+        // atômicos. A mesma consulta confere a RN-031 sem corrida, porque toda
+        // criação no encontro passa por este lock; o índice
+        // `inscricao_ativa_unica` continua sendo a garantia de banco.
         const fila = await tx.execute<LinhaFila>(sql`
-          select count(*) filter (where situacao in ${SITUACOES_QUE_OCUPAM_VAGA})::int as ocupadas,
-                 coalesce(max(posicao_espera) filter (where situacao = 'lista_espera'), 0)::int as ultima_posicao,
-                 count(*) filter (where situacao = 'lista_espera')::int as na_fila
+          select count(*) filter (where tipo = ${ficha.tipo} and situacao in ${SITUACOES_QUE_OCUPAM_VAGA})::int as ocupadas,
+                 coalesce(max(posicao_espera) filter (where tipo = ${ficha.tipo} and situacao = 'lista_espera'), 0)::int as ultima_posicao,
+                 count(*) filter (where tipo = ${ficha.tipo} and situacao = 'lista_espera')::int as na_fila,
+                 min(situacao::text) filter (where pessoa_id = ${pessoaId} and situacao <> 'cancelada') as ja_inscrito
             from inscricao
-           where encontro_id = ${encontroId} and tipo = ${ficha.tipo}`);
-        const { ocupadas, ultima_posicao, na_fila } = fila.rows[0];
+           where encontro_id = ${encontroId}`);
+        const { ocupadas, ultima_posicao, na_fila, ja_inscrito } = fila.rows[0];
+
+        // CA-04. A spec pede também "o link de consulta" na resposta. **Não
+        // vai**: o token é credencial de acesso sem login (RN-133) e CPF não é
+        // segredo — devolvê-lo a quem só digitou o CPF de outra pessoa
+        // entregaria a consulta e o cancelamento da inscrição dela. O link
+        // chega pelo e-mail cadastrado (item 19).
+        if (ja_inscrito) {
+          throw new ErroDeDominio('JA_INSCRITO', 'Já existe uma inscrição sua neste encontro.', {
+            situacao: ja_inscrito,
+          });
+        }
 
         const participante = ficha.tipo === 'participante';
         const temVaga = ocupadas < (participante ? encontro.vagas_participantes : encontro.vagas_servos);
@@ -108,42 +138,67 @@ export class InscricaoPublicaService {
         const inscricaoId = uuidV7();
         // RN-133: 32 bytes aleatórios em base64url, sem relação com o id.
         const token = randomBytes(32).toString('base64url');
-
-        // RN-203/RN-065/RN-096: valor, âncora do preço e faixas de reembolso
-        // congelados na inscrição — reajuste posterior não alcança ninguém.
-        const inserida = await tx.execute<{ criado_em: string }>(sql`
-          insert into inscricao (
-            id, inquilino_id, central_id, encontro_id, pessoa_id, tipo, situacao,
-            convidador_pessoa_id, convidador_nome, area_pretendida, valor_devido,
-            taxa_plataforma_repassada, taxa_plataforma_percentual, reembolso_faixas,
-            campos_extras, token_consulta, posicao_espera
-          ) values (
-            ${inscricaoId}, ${origem.inquilinoId}, ${centralId}, ${encontroId}, ${pessoaId},
-            ${ficha.tipo}, ${situacao}, ${ficha.convidadorPessoaId ?? null},
-            ${ficha.convidadorNome ?? null}, ${ficha.areaPretendida ?? null}, ${valorDevido},
-            ${encontro.taxa_repassada_ao_inscrito}, ${encontro.taxa_plataforma_percentual},
-            ${JSON.stringify(encontro.reembolso_faixas)}::jsonb,
-            ${JSON.stringify(ficha.camposExtras)}::jsonb, ${token},
-            ${temVaga ? null : ultima_posicao + 1}
-          ) returning criado_em`);
-
-        await this.registrarConsentimentos(tx, ficha, termo, { pessoaId, inscricaoId }, origem);
-
-        // RN-136/RN-507: enfileirada aqui, enviada depois do commit — o envio é
-        // o item 19. Até ele existir, a linha espera em `pendente`.
         const gatilho = temVaga ? 'inscricao_criada' : 'lista_espera_registrada';
-        await tx.execute(sql`
-          insert into notificacao (id, inquilino_id, central_id, inscricao_id, pessoa_id, gatilho, canal, destinatario, chave_unica)
-          values (${uuidV7()}, ${origem.inquilinoId}, ${centralId}, ${inscricaoId}, ${pessoaId},
-                  ${gatilho}, 'email', ${ficha.pessoa.email}, ${`${gatilho}:${inscricaoId}:1`})`);
 
-        // RN-200/RN-139: inscrição pelo site é ato `publico`. Sem token nem dado
-        // sensível em `depois` (01-modelo-de-dados.md §4.7).
-        await tx.execute(sql`
-          insert into auditoria (id, inquilino_id, central_id, entidade, entidade_id, acao, ator_tipo, depois, ip, user_agent)
-          values (${uuidV7()}, ${origem.inquilinoId}, ${centralId}, 'inscricao', ${inscricaoId}, 'criada', 'publico',
-                  ${JSON.stringify({ situacao, tipo: ficha.tipo, valorDevido: Number(valorDevido) })}::jsonb,
-                  ${origem.ip}, ${origem.userAgent})`);
+        // RN-090b: um registro por ato de aceite, finalidades copiadas da
+        // versão. RN-093a: a retenção, quando marcada, é linha própria — nunca
+        // finalidade dentro da obrigatória, para poder ser revogada sozinha.
+        const consentimentos = [
+          { id: uuidV7(), finalidades: termo.finalidades },
+          ...(ficha.consentimentoRetencao ? [{ id: uuidV7(), finalidades: ['retencao'] }] : []),
+        ];
+
+        // Um comando só, pelo mesmo motivo do "antes do lock" acima. As FKs
+        // entre as CTEs (consentimento → inscricao) são conferidas no fim do
+        // comando, quando a inscrição já existe.
+        const inserida = await tx.execute<{ criado_em: string }>(sql`
+          with inscricao_nova as (
+            -- RN-203/RN-065/RN-096: valor, âncora do preço e faixas de reembolso
+            -- congelados na inscrição — reajuste posterior não alcança ninguém.
+            insert into inscricao (
+              id, inquilino_id, central_id, encontro_id, pessoa_id, tipo, situacao,
+              convidador_pessoa_id, convidador_nome, area_pretendida, valor_devido,
+              taxa_plataforma_repassada, taxa_plataforma_percentual, reembolso_faixas,
+              campos_extras, token_consulta, posicao_espera
+            ) values (
+              ${inscricaoId}, ${origem.inquilinoId}, ${centralId}, ${encontroId}, ${pessoaId},
+              ${ficha.tipo}, ${situacao}, ${ficha.convidadorPessoaId ?? null},
+              ${ficha.convidadorNome ?? null}, ${ficha.areaPretendida ?? null}, ${valorDevido},
+              ${encontro.taxa_repassada_ao_inscrito}, ${encontro.taxa_plataforma_percentual},
+              ${JSON.stringify(encontro.reembolso_faixas)}::jsonb,
+              ${JSON.stringify(ficha.camposExtras)}::jsonb, ${token},
+              ${temVaga ? null : ultima_posicao + 1}
+            ) returning criado_em
+          ), consentimento_novo as (
+            insert into consentimento (
+              id, inquilino_id, pessoa_id, inscricao_id, termo_id, versao_termo, finalidades,
+              aceito_em, ip, user_agent, origem
+            )
+            select c.id, app_inquilino_id(), ${pessoaId}::uuid, ${inscricaoId}::uuid, ${termo.id}::uuid,
+                   ${termo.versao}::text, c.finalidades, now(), ${origem.ip}::inet,
+                   ${origem.userAgent}::text, 'site_publico'
+              from jsonb_to_recordset(${JSON.stringify(consentimentos)}::jsonb) as c(id uuid, finalidades text[])
+          ), notificacao_nova as (
+            -- RN-136/RN-507: enfileirada aqui, enviada depois do commit — o
+            -- envio é o item 19. Até ele existir, a linha espera em 'pendente'.
+            insert into notificacao (
+              id, inquilino_id, central_id, inscricao_id, pessoa_id, gatilho, canal, destinatario, chave_unica
+            ) values (
+              ${uuidV7()}, ${origem.inquilinoId}, ${centralId}, ${inscricaoId}, ${pessoaId},
+              ${gatilho}, 'email', ${ficha.pessoa.email}, ${`${gatilho}:${inscricaoId}:1`}
+            )
+          ), auditoria_nova as (
+            -- RN-200/RN-139: inscrição pelo site é ato 'publico'. Sem token nem
+            -- dado sensível em 'depois' (01-modelo-de-dados.md §4.7).
+            insert into auditoria (
+              id, inquilino_id, central_id, entidade, entidade_id, acao, ator_tipo, depois, ip, user_agent
+            ) values (
+              ${uuidV7()}, ${origem.inquilinoId}, ${centralId}, 'inscricao', ${inscricaoId}, 'criada', 'publico',
+              ${JSON.stringify({ situacao, tipo: ficha.tipo, valorDevido: Number(valorDevido) })}::jsonb,
+              ${origem.ip}, ${origem.userAgent}
+            )
+          )
+          select criado_em from inscricao_nova`);
 
         const criadoEm = new Date(inserida.rows[0].criado_em).getTime();
         return {
@@ -161,32 +216,33 @@ export class InscricaoPublicaService {
   }
 
   /**
-   * Leitura sem lock, em transação própria, só para descobrir a central — o
-   * contexto da escrita depende dela. Rascunho some aqui (CA-31); as outras
-   * situações seguem, para a recusa sair como `INSCRICOES_FECHADAS` depois.
+   * Leitura sem lock, em transação própria, para descobrir a central — o
+   * contexto da escrita depende dela. Rascunho some aqui (CA-31). A janela é
+   * conferida já aqui para recusar cedo, sem gravar nada (CA-05), e de novo sob
+   * o lock, que é a conferência que vale.
    */
   private async centralDoEncontro(inquilinoId: string, encontroId: string): Promise<string> {
-    const centralId = UUID.test(encontroId)
+    const linha = UUID.test(encontroId)
       ? await this.uow.executar(contextoDeLeituraPublica(inquilinoId), async (tx) => {
-          const r = await tx.execute<{ central_id: string }>(
-            sql`select central_id from encontro where id = ${encontroId} and situacao <> 'rascunho'`,
-          );
-          return r.rows[0]?.central_id;
+          const r = await tx.execute<LinhaJanela & { central_id: string }>(sql`
+            select e.central_id, ${COLUNAS_DA_JANELA}
+              from encontro e join inquilino i on i.id = e.inquilino_id
+             where e.id = ${encontroId} and e.situacao <> 'rascunho'`);
+          return r.rows[0];
         })
       : undefined;
 
-    if (!centralId) throw new ErroDeDominio('ENCONTRO_NAO_ENCONTRADO', 'Encontro não encontrado.');
-    return centralId;
+    if (!linha) throw new ErroDeDominio('ENCONTRO_NAO_ENCONTRADO', 'Encontro não encontrado.');
+    exigirInscricoesAbertas(linha);
+    return linha.central_id;
   }
 
-  /** RN-503: o `for update` na linha do encontro serializa toda inscrição nele.
-   *  RN-202 é conferida aqui, já sob o lock, com o relógio do banco. */
+  /** RN-503: o `for update` na linha do encontro serializa toda inscrição nele. */
   private async travarEncontro(tx: Tx, encontroId: string): Promise<LinhaEncontroTravado> {
     const r = await tx.execute<LinhaEncontroTravado>(sql`
-      select e.situacao, e.vagas_participantes, e.vagas_servos, e.taxa_participante, e.taxa_servo,
-             (e.inscricoes_abrem_em <= now() and now() < e.inscricoes_fecham_em) as janela_aberta,
-             c.reembolso_faixas, i.situacao as situacao_inquilino,
-             i.taxa_plataforma_percentual, i.taxa_repassada_ao_inscrito
+      select ${COLUNAS_DA_JANELA},
+             e.vagas_participantes, e.vagas_servos, e.taxa_participante, e.taxa_servo,
+             c.reembolso_faixas, i.taxa_plataforma_percentual, i.taxa_repassada_ao_inscrito
         from encontro e
         join central c on c.id = e.central_id
         join inquilino i on i.id = e.inquilino_id
@@ -195,23 +251,7 @@ export class InscricaoPublicaService {
     const encontro = r.rows[0];
 
     if (!encontro) throw new ErroDeDominio('ENCONTRO_NAO_ENCONTRADO', 'Encontro não encontrado.');
-
-    // CA-37 / RN-063t: a mensagem orienta procurar a coordenação.
-    if (encontro.situacao_inquilino === 'suspenso') {
-      throw new ErroDeDominio(
-        'INSCRICOES_SUSPENSAS',
-        'As inscrições estão temporariamente suspensas. Procure a coordenação do encontro.',
-      );
-    }
-
-    if (
-      encontro.situacao_inquilino !== 'ativo' ||
-      encontro.situacao !== 'publicado' ||
-      !encontro.janela_aberta
-    ) {
-      throw new ErroDeDominio('INSCRICOES_FECHADAS', 'As inscrições para este encontro não estão abertas.');
-    }
-
+    exigirInscricoesAbertas(encontro);
     return encontro;
   }
 
@@ -255,112 +295,77 @@ export class InscricaoPublicaService {
   }
 
   /**
-   * 02-inscricao.md §2.2. A identidade é global e só se chega a ela por
-   * `resolver_identidade`, que devolve o uuid e nada mais (RN-124, RN-065t). A
-   * pessoa é deste inquilino: reaproveitada se já existe aqui, criada do zero
-   * se não — nada vem de outro inquilino (RN-013, CA-24d).
+   * 02-inscricao.md §2.2, num comando só. A identidade é global e só se chega a
+   * ela por `resolver_identidade`, que devolve o uuid e nada mais (RN-124,
+   * RN-065t). A pessoa é deste inquilino: reaproveitada se já existe aqui —
+   * atualizando contato e endereço, nunca `nome_completo` (CA-03) —, criada do
+   * zero se não — nada vem de outro inquilino (RN-013, CA-24d). Dado sensível é
+   * sempre sobrescrito: o da inscrição atual é o que a cozinha precisa.
+   *
+   * Isto roda fora do lock do encontro, então duas fichas do mesmo CPF ao mesmo
+   * tempo (clique duplo) chegariam juntas a `resolver_identidade`, que faz
+   * select-e-insert e não pode ser reescrita (0002: cópia da spec). O advisory
+   * lock por CPF, até o commit, serializa só esse caso.
    */
   private async registrarPessoa(tx: Tx, ficha: Ficha, centralId: string): Promise<string> {
     const p = ficha.pessoa;
-    const identidade = await tx.execute<{ id: string }>(
-      sql`select resolver_identidade(${p.cpf}, ${p.nomeCompleto}, ${p.dataNascimento}::date) as id`,
-    );
-    const identidadeId = identidade.rows[0].id;
+    const s = ficha.dadosSensiveis ?? {};
 
-    const existente = await tx.execute<{ id: string }>(
-      sql`select id from pessoa where identidade_id = ${identidadeId}`,
-    );
-    let pessoaId = existente.rows[0]?.id;
-
-    if (pessoaId) {
-      // Atualiza contato e endereço; `nome_completo` não — erro de digitação
-      // não apaga o cadastro histórico (CA-03).
-      await tx.execute(sql`
-        update pessoa
-           set telefone = ${p.telefone}, email = ${p.email}, cep = ${p.cep ?? null},
-               logradouro = ${p.logradouro ?? null}, numero = ${p.numero ?? null},
-               complemento = ${p.complemento ?? null}, bairro = ${p.bairro ?? null},
-               cidade = ${p.cidade ?? null}, uf = ${p.uf ?? null}, atualizado_em = now()
-         where id = ${pessoaId}`);
-    } else {
-      pessoaId = uuidV7();
-      await tx.execute(sql`
+    const r = await tx.execute<{ pessoa_id: string }>(sql`
+      with trava as (
+        select pg_advisory_xact_lock(hashtextextended(${`identidade:${p.cpf}`}, 0))
+      ), identidade as (
+        select resolver_identidade(${p.cpf}, ${p.nomeCompleto}, ${p.dataNascimento}::date) as id from trava
+      ), pessoa_gravada as (
         insert into pessoa (
           id, inquilino_id, identidade_id, central_origem_id, nome_completo, nome_cracha,
           data_nascimento, telefone, email, cep, logradouro, numero, complemento, bairro,
           cidade, uf, estado_civil, contato_emergencia_nome, contato_emergencia_fone
-        ) values (
-          ${pessoaId}, app_inquilino_id(), ${identidadeId}, ${centralId}, ${p.nomeCompleto},
-          ${p.nomeCracha}, ${p.dataNascimento}::date, ${p.telefone}, ${p.email}, ${p.cep ?? null},
-          ${p.logradouro ?? null}, ${p.numero ?? null}, ${p.complemento ?? null}, ${p.bairro ?? null},
-          ${p.cidade ?? null}, ${p.uf ?? null}, ${p.estadoCivil ?? null},
-          ${p.contatoEmergenciaNome}, ${p.contatoEmergenciaFone}
-        )`);
-    }
-
-    // §2.2: dado sensível é sempre sobrescrito — o da inscrição atual é o que a
-    // cozinha e a equipe de saúde precisam.
-    const s = ficha.dadosSensiveis ?? {};
-    await tx.execute(sql`
+        )
+        select ${uuidV7()}::uuid, app_inquilino_id(), identidade.id, ${centralId}::uuid,
+               ${p.nomeCompleto}::text, ${p.nomeCracha}::text, ${p.dataNascimento}::date,
+               ${p.telefone}::text, ${p.email}::text, ${p.cep ?? null}::text,
+               ${p.logradouro ?? null}::text, ${p.numero ?? null}::text, ${p.complemento ?? null}::text,
+               ${p.bairro ?? null}::text, ${p.cidade ?? null}::text, ${p.uf ?? null}::text,
+               ${p.estadoCivil ?? null}::text, ${p.contatoEmergenciaNome}::text,
+               ${p.contatoEmergenciaFone}::text
+          from identidade
+        on conflict (inquilino_id, identidade_id) do update set
+          telefone = excluded.telefone, email = excluded.email, cep = excluded.cep,
+          logradouro = excluded.logradouro, numero = excluded.numero,
+          complemento = excluded.complemento, bairro = excluded.bairro,
+          cidade = excluded.cidade, uf = excluded.uf, atualizado_em = now()
+        returning id
+      )
       insert into pessoa_dado_sensivel (
         pessoa_id, inquilino_id, restricao_alimentar, condicao_saude, medicamentos_uso_continuo, religiao_declarada
-      ) values (
-        ${pessoaId}, app_inquilino_id(), ${s.restricaoAlimentar ?? null}, ${s.condicaoSaude ?? null},
-        ${s.medicamentosUsoContinuo ?? null}, ${s.religiaoDeclarada ?? null}
       )
+      select id, app_inquilino_id(), ${s.restricaoAlimentar ?? null}::text, ${s.condicaoSaude ?? null}::text,
+             ${s.medicamentosUsoContinuo ?? null}::text, ${s.religiaoDeclarada ?? null}::text
+        from pessoa_gravada
       on conflict (pessoa_id) do update set
         restricao_alimentar = excluded.restricao_alimentar,
         condicao_saude = excluded.condicao_saude,
         medicamentos_uso_continuo = excluded.medicamentos_uso_continuo,
         religiao_declarada = excluded.religiao_declarada,
-        atualizado_em = now()`);
+        atualizado_em = now()
+      returning pessoa_id`);
 
-    return pessoaId;
+    return r.rows[0].pessoa_id;
+  }
+}
+
+/** RN-202 e RN-063t, conferidas antes e sob o lock — por isso uma função só. */
+function exigirInscricoesAbertas(linha: LinhaJanela): void {
+  // CA-37: a mensagem orienta procurar a coordenação.
+  if (linha.situacao_inquilino === 'suspenso') {
+    throw new ErroDeDominio(
+      'INSCRICOES_SUSPENSAS',
+      'As inscrições estão temporariamente suspensas. Procure a coordenação do encontro.',
+    );
   }
 
-  /**
-   * RN-031 (CA-04). O índice `inscricao_ativa_unica` é a garantia; esta consulta
-   * é o que transforma a colisão em `409` legível, e não tem corrida porque toda
-   * criação no encontro passa pelo mesmo lock.
-   *
-   * A spec pede também "o link de consulta" na resposta. **Não vai**: o token é
-   * credencial de acesso sem login (RN-133) e CPF não é segredo — devolvê-lo a
-   * quem só digitou o CPF de outra pessoa entregaria a consulta e o cancelamento
-   * da inscrição dela. O link chega pelo e-mail cadastrado (item 19).
-   */
-  private async recusarSeJaInscrito(tx: Tx, encontroId: string, pessoaId: string): Promise<void> {
-    const r = await tx.execute<{ situacao: string }>(sql`
-      select situacao from inscricao
-       where encontro_id = ${encontroId} and pessoa_id = ${pessoaId} and situacao <> 'cancelada'`);
-
-    if (r.rows[0]) {
-      throw new ErroDeDominio('JA_INSCRITO', 'Já existe uma inscrição sua neste encontro.', {
-        situacao: r.rows[0].situacao,
-      });
-    }
-  }
-
-  /** RN-090b: um registro por ato de aceite, finalidades copiadas da versão.
-   *  RN-093a: a retenção, quando marcada, é linha própria — nunca finalidade
-   *  dentro da obrigatória, para poder ser revogada sozinha. */
-  private async registrarConsentimentos(
-    tx: Tx,
-    ficha: Ficha,
-    termo: { id: string; versao: string; finalidades: string[] },
-    alvo: { pessoaId: string; inscricaoId: string },
-    origem: OrigemDaFicha,
-  ): Promise<void> {
-    const registrar = (finalidades: string[]) =>
-      tx.execute(sql`
-        insert into consentimento (
-          id, inquilino_id, pessoa_id, inscricao_id, termo_id, versao_termo, finalidades,
-          aceito_em, ip, user_agent, origem
-        ) values (
-          ${uuidV7()}, app_inquilino_id(), ${alvo.pessoaId}, ${alvo.inscricaoId}, ${termo.id},
-          ${termo.versao}, ${sql.param(finalidades)}::text[], now(), ${origem.ip}, ${origem.userAgent}, 'site_publico'
-        )`);
-
-    await registrar(termo.finalidades);
-    if (ficha.consentimentoRetencao) await registrar(['retencao']);
+  if (linha.situacao_inquilino !== 'ativo' || linha.situacao !== 'publicado' || !linha.janela_aberta) {
+    throw new ErroDeDominio('INSCRICOES_FECHADAS', 'As inscrições para este encontro não estão abertas.');
   }
 }
