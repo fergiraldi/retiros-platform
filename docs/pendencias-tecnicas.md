@@ -444,9 +444,12 @@ RN-018 manda o link de convite por e-mail e F8 sem canal de entrega não fecha.
   e **aceita quando vem ausente**, porque exigir `true` recusaria conta legítima.
 - **Impacto**: se a confirmação de e-mail estiver desligada no projeto Supabase, alguém pode se
   cadastrar com o e-mail de outra pessoa, receber token sem confirmar, e entrar na conta dela.
-- **Status**: aberto, e é verificação de infraestrutura, não de código — conferir no painel de
-  Auth do projeto `vuiwjcaahfnxpzrrscsy` que a confirmação de e-mail está exigida, antes do
-  go-live.
+- **Status**: **resolvido em 29/10/2026, verificado no painel** do projeto
+  `vuiwjcaahfnxpzrrscsy` (Authentication → Sign In / Providers → User Signups): "Confirm email"
+  ligado, "Allow anonymous sign-ins" desligado, e "Secure email change" ligado no provedor de
+  e-mail, que exige confirmar a troca nos dois endereços. Sem e-mail confirmado o Supabase não
+  emite sessão, então a fraqueza da claim descrita abaixo deixa de importar enquanto essa
+  configuração valer. Quem desligar "Confirm email" reabre o item.
 - **Correção de 11/09/2026 — a checagem do código é mais fraca do que este item dizia**: a
   frase anterior ("o código já recusa o `false` explícito; o que falta é garantir que a claim
   exista") subestima o problema. `user_metadata` vem de `raw_user_meta_data` no Supabase, que
@@ -594,20 +597,21 @@ O que a área pública da F1 (`src/publico/`) deixou de fora, ou decidiu diferen
 
 ### `409 JA_INSCRITO` não devolve o link de consulta
 
-- **Descrição**: CA-04 e 02-inscricao.md §2.3 pedem que a resposta traga "a situação da inscrição
-  existente e o link de consulta". A resposta traz só a `situacao`.
+- **Status**: **decidido em 29/10/2026** — fica sem o link. A spec (02-inscricao.md §2.3) e o
+  CA-04 foram corrigidos e passam a pedir o reenvio para o e-mail já cadastrado. **O que ainda
+  falta**: o reenvio em si, que nasce com o item 19.
+- **Descrição**: CA-04 e 02-inscricao.md §2.3 pediam que a resposta trouxesse "a situação da
+  inscrição existente e o link de consulta". A resposta traz só a `situacao`.
 - **Por quê**: o link carrega o `token_consulta`, que é credencial sem login (RN-133) — dá a
   consulta e o cancelamento. A ficha é anônima e CPF não é segredo: devolver o token a quem digitou
   o CPF de outra pessoa entregaria a inscrição dela. O caminho seguro é reenviar o link para o
   e-mail **já cadastrado**, que depende do item 19.
-- **Status**: aberto, para decisão de produto. Corrigir o texto da spec e do CA-04, ou definir o
-  reenvio por e-mail junto do item 19.
+### ~~Spec contraditória sobre inquilino suspenso~~
 
-### Spec contraditória sobre inquilino suspenso
-
-- **Descrição**: 02-inscricao.md §2.1 diz "inquilino `suspenso`: `422 INSCRICOES_FECHADAS`"; a lista
-  de erros do §4.3 e o CA-37 dizem `503 INSCRICOES_SUSPENSAS`. O código segue o §4.3 e o CA-37.
-- **Status**: aberto — corrigir o §2.1.
+- **Status**: **resolvido em 29/10/2026**, corrigindo o §2.1 para `503 INSCRICOES_SUSPENSAS`.
+- **Descrição**: 02-inscricao.md §2.1 dizia "inquilino `suspenso`: `422 INSCRICOES_FECHADAS`"; a
+  lista de erros do §4.3 e o CA-37 dizem `503 INSCRICOES_SUSPENSAS`. O código já seguia o §4.3 e o
+  CA-37.
 
 ### Leituras públicas rodam sob contexto elevado
 

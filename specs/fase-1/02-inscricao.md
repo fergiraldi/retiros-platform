@@ -49,7 +49,7 @@ Transições permitidas, nada além disso:
 - `inscricoes_abrem_em <= now() < inscricoes_fecham_em` — o instante de abertura já está dentro, o de fechamento já está fora
 - inquilino `ativo`
 
-Fora da janela ou com inquilino `suspenso`: `422 INSCRICOES_FECHADAS`. Nunca esconder o botão como única defesa — link antigo compartilhado em grupo de WhatsApp continua sendo clicado semanas depois. A **criação administrativa** de inscrição pela coordenação (§4.7) é dispensada dos três predicados (RN-035): não passa por este checkout.
+Fora da janela: `422 INSCRICOES_FECHADAS`. Inquilino `suspenso`: `503 INSCRICOES_SUSPENSAS`, com mensagem orientando procurar a coordenação (RN-063t, CA-37). Nunca esconder o botão como única defesa — link antigo compartilhado em grupo de WhatsApp continua sendo clicado semanas depois. A **criação administrativa** de inscrição pela coordenação (§4.7) é dispensada dos três predicados (RN-035): não passa por este checkout.
 
 ### 2.2 Identidade e deduplicação de pessoa (RN-010 a RN-014)
 
@@ -69,7 +69,9 @@ Ao receber a ficha:
 
 ### 2.3 Uma inscrição ativa por encontro (RN-031)
 
-Garantido por índice parcial ([01-modelo-de-dados.md](01-modelo-de-dados.md#36-inscricao)). Violação vira `409 JA_INSCRITO`, com a situação da inscrição existente e o link de consulta — a pessoa quase sempre esqueceu que já se inscreveu, e mandá-la para a própria inscrição resolve sem passar pela secretaria.
+Garantido por índice parcial ([01-modelo-de-dados.md](01-modelo-de-dados.md#36-inscricao)). Violação vira `409 JA_INSCRITO`, com a situação da inscrição existente — a pessoa quase sempre esqueceu que já se inscreveu, e dizer em que pé a inscrição está resolve sem passar pela secretaria.
+
+**A resposta nunca traz o link de consulta.** O link carrega o `token_consulta`, que é credencial de acesso sem login (RN-133) — dá a consulta e o cancelamento. A ficha é anônima e CPF não é segredo: devolver o link a quem preencheu a ficha entregaria a inscrição de outra pessoa a quem soubesse o CPF dela. O caminho é reenviar o link para o e-mail **já cadastrado** na inscrição existente, que só o titular lê (depende do envio de e-mail, item 19 de `docs/proximos-passos.md`).
 
 Se a inscrição existente estiver `cancelada`, a nova é aceita normalmente.
 

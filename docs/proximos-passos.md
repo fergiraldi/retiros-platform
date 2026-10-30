@@ -141,9 +141,9 @@ desenvolvimento, mas precisam ser resolvidos em paralelo:
   sozinho (medido: `10/10` em `_migracoes`, última às 22:08:46, dentro da janela de
   `DEPLOYING`). Os três ambientes estão em `10/10`. O fluxo atual — `develop` → `hom`, `main`
   → `prod`, ambos aplicando migration no deploy — está no `README.md`.
-- **Confirmação de e-mail exigida no projeto Supabase** — o código recusa `email_verified: false`,
-  mas a claim não é garantida; se o projeto não exigir confirmação, alguém entra com o e-mail de
-  outra pessoa. Ver [pendencias-tecnicas.md](pendencias-tecnicas.md).
+- ~~**Confirmação de e-mail exigida no projeto Supabase**~~ — **resolvido em 29/10/2026**,
+  conferido no painel: "Confirm email" ligado e login anônimo desligado. Ver
+  [pendencias-tecnicas.md](pendencias-tecnicas.md).
 
 ## Riscos principais
 
@@ -155,8 +155,10 @@ desenvolvimento, mas precisam ser resolvidos em paralelo:
   tipicamente só por IP) — risco real de subestimar o esforço do item 6.
 - SDK/contrato do Mercado Pago ainda não escolhido nem instalado — cliente HTTP, OAuth,
   split e idempotência de webhook partem do zero.
-- Provedor de e-mail ainda em aberto no PRD (ao contrário do WhatsApp, que já tem
-  decisão nº 1 explícita, mesmo que pendente).
+- ~~Provedor de e-mail ainda em aberto no PRD~~ — **decidido em 29/10/2026: Resend**, por API
+  HTTP, sem SDK. Cabe no modelo do PRD §7 ("Identidade do remetente"): domínio técnico de envio
+  (SPF/DKIM) único da plataforma, com nome de exibição e endereço de resposta por inquilino e
+  por central. Destrava o 19a; falta a conta e o domínio de envio verificado por DNS.
 
 ## Fora de escopo da Fase 1
 

@@ -119,11 +119,9 @@ export class InscricaoPublicaService {
            where encontro_id = ${encontroId}`);
         const { ocupadas, ultima_posicao, na_fila, ja_inscrito } = fila.rows[0];
 
-        // CA-04. A spec pede também "o link de consulta" na resposta. **Não
-        // vai**: o token é credencial de acesso sem login (RN-133) e CPF não é
-        // segredo — devolvê-lo a quem só digitou o CPF de outra pessoa
-        // entregaria a consulta e o cancelamento da inscrição dela. O link
-        // chega pelo e-mail cadastrado (item 19).
+        // CA-04: a situação, e nunca o link de consulta (02-inscricao.md §2.3)
+        // — o token é credencial sem login (RN-133) e CPF não é segredo. O
+        // reenvio para o e-mail já cadastrado é o item 19.
         if (ja_inscrito) {
           throw new ErroDeDominio('JA_INSCRITO', 'Já existe uma inscrição sua neste encontro.', {
             situacao: ja_inscrito,

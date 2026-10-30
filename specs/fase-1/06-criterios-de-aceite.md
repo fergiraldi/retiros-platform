@@ -50,7 +50,8 @@ Formato: `Dado / Quando / Então`. Cada cenário vira ao menos um teste automati
 **Dado** que João já tem inscrição ativa no encontro
 **Quando** ele preenche a ficha de novo
 **Então** recebe `409 JA_INSCRITO`
-**E** a resposta traz a situação da inscrição existente e o link de consulta
+**E** a resposta traz a situação da inscrição existente, **nunca** o link de consulta (RN-133 — quem sabe o CPF de alguém não ganha acesso à inscrição dele)
+**E** o link é reenviado para o e-mail já cadastrado na inscrição existente
 **E** nenhuma segunda inscrição é criada
 
 ---
