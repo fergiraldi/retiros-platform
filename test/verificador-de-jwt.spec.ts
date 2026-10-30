@@ -86,6 +86,18 @@ describe('VerificadorDeJwtService (PRD §8.1, passo 2)', () => {
     await expect(criarVerificador().verificar(token)).rejects.toThrow(/exp/i);
   });
 
+  it('recusa token sem exp — o jose só confere a expiração quando a claim existe', async () => {
+    const token = await new SignJWT({ email: 'pessoa@exemplo.com.br' })
+      .setProtectedHeader({ alg: 'ES256' })
+      .setSubject('sub-do-provedor')
+      .setIssuer(EMISSOR)
+      .setAudience(AUDIENCIA)
+      .setIssuedAt()
+      .sign(chavePrivada);
+
+    await expect(criarVerificador().verificar(token)).rejects.toThrow(/exp/i);
+  });
+
   it('recusa emissor diferente do configurado', async () => {
     const token = await assinar({ emissor: 'https://outro-projeto.supabase.co/auth/v1' });
 

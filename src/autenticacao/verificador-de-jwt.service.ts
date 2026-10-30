@@ -47,6 +47,9 @@ export class VerificadorDeJwtService {
       audience: ambiente.SUPABASE_JWT_AUDIENCIA,
       algorithms: ALGORITMOS,
       clockTolerance: TOLERANCIA_DE_RELOGIO_S,
+      // O `jose` só confere `exp` quando a claim existe: sem isto, um token
+      // emitido sem ela passaria e não expiraria nunca.
+      requiredClaims: ['exp'],
     });
 
     // Sessão anônima do Supabase: JWT válido, assinado pelo mesmo projeto, sem
