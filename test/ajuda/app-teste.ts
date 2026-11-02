@@ -40,7 +40,12 @@ export interface AppDeTeste {
  * (`APP_GUARD`/`APP_INTERCEPTOR`/`APP_FILTER` de `src/app.module.ts`) valem
  * para toda a aplicação, não só para os controllers declarados na `AppModule`.
  */
-export async function criarAppDeTeste(modulosExtras: Type[] = []): Promise<AppDeTeste> {
+export async function criarAppDeTeste(
+  modulosExtras: Type[] = [],
+  /** Providers trocados por falsos — ex.: o cliente do Mercado Pago, que
+   *  nenhum teste chama de verdade. */
+  falsos: { provide: unknown; useValue: unknown }[] = [],
+): Promise<AppDeTeste> {
   const emissorOriginal = ambiente.SUPABASE_JWT_EMISSOR;
   const audienciaOriginal = ambiente.SUPABASE_JWT_AUDIENCIA;
   ambiente.SUPABASE_JWT_EMISSOR = EMISSOR_DE_TESTE;
@@ -48,12 +53,13 @@ export async function criarAppDeTeste(modulosExtras: Type[] = []): Promise<AppDe
 
   const { privateKey, publicKey } = await generateKeyPair('ES256');
 
-  const moduleRef = await Test.createTestingModule({
+  const construtor = Test.createTestingModule({
     imports: [AppModule, ...modulosExtras],
   })
     .overrideProvider(CHAVES_JWT)
-    .useValue(() => Promise.resolve(publicKey as KeyLike))
-    .compile();
+    .useValue(() => Promise.resolve(publicKey as KeyLike));
+  for (const falso of falsos) construtor.overrideProvider(falso.provide).useValue(falso.useValue);
+  const moduleRef = await construtor.compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>();
 

@@ -34,6 +34,20 @@ const esquema = z.object({
   // Audiência esperada na claim `aud`. O Supabase Auth emite `authenticated`
   // para sessão de usuário logado.
   SUPABASE_JWT_AUDIENCIA: z.string().default('authenticated'),
+
+  // Mercado Pago (item 9): credenciais da APLICAÇÃO da plataforma no painel
+  // "Suas integrações" — não de denominação nenhuma. O token de cada
+  // denominação vem do OAuth e vive no cofre (RN-104). Vazias não derrubam o
+  // boot, ao contrário das do Supabase: sem recebimento a área pública segue
+  // no ar (RN-098), e só a conexão responde que não está configurada.
+  MERCADO_PAGO_CLIENT_ID: z.string().default(''),
+  MERCADO_PAGO_CLIENT_SECRET: z.string().default(''),
+  // Igual, byte a byte, a uma das "Redirect URLs" da aplicação no painel — o
+  // Mercado Pago recusa a troca do code se não bater.
+  MERCADO_PAGO_REDIRECT_URI: z.string().default(''),
+  // `test_token` da troca do code: `true` gera credenciais de sandbox, para
+  // conectar as contas de teste do painel.
+  MERCADO_PAGO_TOKEN_DE_TESTE: z.stringbool().default(false),
 })
   // Default vazio mantém a suíte e o CI verdes (não há JWT real ali: o teste
   // injeta o próprio par de chaves). Em produção, vazio é configuração

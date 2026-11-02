@@ -9,10 +9,11 @@ import { ResolvedorDeHostGuard } from './contexto/resolvedor-de-host.guard';
 import { DbModule } from './db/db.module';
 import { EnvelopeDeErroFilter } from './erros/envelope-de-erro.filter';
 import { PublicoModule } from './publico/publico.module';
+import { RecebimentoModule } from './recebimento/recebimento.module';
 import { SaudeController } from './saude/saude.controller';
 
 @Module({
-  imports: [DbModule, ContextoModule, AutenticacaoModule, PublicoModule],
+  imports: [DbModule, ContextoModule, AutenticacaoModule, PublicoModule, RecebimentoModule],
   controllers: [SaudeController, SessaoController],
   providers: [
     // RNF-006: global, não por controller — toda rota, autenticada ou não,
