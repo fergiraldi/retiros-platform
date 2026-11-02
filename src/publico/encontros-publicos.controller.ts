@@ -74,7 +74,7 @@ export class EncontrosPublicosController {
  * responde como host desconhecido — "o subdomínio não entra no ar" até a
  * ativação (CA-34) —, e o host do operador não tem área pública.
  */
-function inquilinoDaAreaPublica(req: RequisicaoComContexto): string {
+export function inquilinoDaAreaPublica(req: RequisicaoComContexto): string {
   const host = req.hostResolvido;
   if (!host?.inquilinoId || host.situacao === 'em_implantacao') throw new NotFoundException();
   return host.inquilinoId;

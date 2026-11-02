@@ -6,14 +6,24 @@ import { SessaoController } from './autenticacao/sessao.controller';
 import { ContextoModule } from './contexto/contexto.module';
 import { ContextoInterceptor } from './contexto/contexto.interceptor';
 import { ResolvedorDeHostGuard } from './contexto/resolvedor-de-host.guard';
+import { CobrancaModule } from './cobranca/cobranca.module';
 import { DbModule } from './db/db.module';
 import { EnvelopeDeErroFilter } from './erros/envelope-de-erro.filter';
+import { LimiteDeTaxaModule } from './limite-de-taxa/limite-de-taxa.module';
 import { PublicoModule } from './publico/publico.module';
 import { RecebimentoModule } from './recebimento/recebimento.module';
 import { SaudeController } from './saude/saude.controller';
 
 @Module({
-  imports: [DbModule, ContextoModule, AutenticacaoModule, PublicoModule, RecebimentoModule],
+  imports: [
+    DbModule,
+    ContextoModule,
+    AutenticacaoModule,
+    LimiteDeTaxaModule,
+    PublicoModule,
+    RecebimentoModule,
+    CobrancaModule,
+  ],
   controllers: [SaudeController, SessaoController],
   providers: [
     // RNF-006: global, não por controller — toda rota, autenticada ou não,

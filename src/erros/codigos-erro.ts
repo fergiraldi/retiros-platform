@@ -45,6 +45,11 @@ export type CodigoErro =
   | 'COBRANCA_JA_EXISTE'
   /** Recusa do emissor do cartão (RN-311, specs/fase-1/03-cobranca.md). */
   | 'PAGAMENTO_RECUSADO'
+  /** Depois do marco de corte do pagamento online (`data_inicio` do encontro,
+   *  RN-041): daí em diante quem recebe é a secretaria, na recepção. Não está
+   *  na tabela de erros de 03-cobranca.md §3.1, que não diz o que responder —
+   *  e o front precisa distinguir isto de inscrição fechada. */
+  | 'PAGAMENTO_ONLINE_ENCERRADO'
   /** Publicação de encontro sem os campos obrigatórios
    *  (specs/fase-1/01-modelo-de-dados.md). */
   | 'ENCONTRO_INCOMPLETO'
@@ -83,6 +88,7 @@ export const CATALOGO_ERROS: Record<CodigoErro, HttpStatus> = {
   TOKEN_EXPIRADO: HttpStatus.UNPROCESSABLE_ENTITY,
   COBRANCA_JA_EXISTE: HttpStatus.CONFLICT,
   PAGAMENTO_RECUSADO: HttpStatus.PAYMENT_REQUIRED,
+  PAGAMENTO_ONLINE_ENCERRADO: HttpStatus.UNPROCESSABLE_ENTITY,
   ENCONTRO_INCOMPLETO: HttpStatus.UNPROCESSABLE_ENTITY,
   RECEBIMENTO_INDISPONIVEL: HttpStatus.SERVICE_UNAVAILABLE,
   CONTA_INATIVA: HttpStatus.FORBIDDEN,
