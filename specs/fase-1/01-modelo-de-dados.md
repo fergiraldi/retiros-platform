@@ -133,15 +133,20 @@ create table conexao_gateway (
   conectada_em        timestamptz not null default now(),
   desativada_em       timestamptz,
   motivo_desativacao  text,
-  criado_em           timestamptz not null default now(),
-
-  constraint conexao_gateway_unica unique (inquilino_id, central_id, gateway)
+  criado_em           timestamptz not null default now()
 );
+
+-- uma conexão ATIVA por escopo; nulo de central_id conta como valor (migration 0010)
+create unique index conexao_gateway_ativa_unica
+  on conexao_gateway (inquilino_id, central_id, gateway) nulls not distinct
+  where ativa;
 ```
 
 `central_id` nulo = conexão do inquilino inteiro; preenchido = conexão daquela central. É o formato definitivo da decisão nº 2 de §11 do PRD (**fechada**): o inquilino conecta por padrão, e a central com conta distinta conecta a própria, a qualquer momento, sobrepondo o padrão só para ela — a resolução de uma cobrança procura primeiro a da central e, não achando, a do inquilino. Reconectar substitui a anterior no mesmo ato — a linha antiga fica `ativa = false` com `desativada_em`, e **não é apagada**, porque cobrança emitida por ela continua viva no gateway e o webhook dela continua chegando. `motivo_desativacao` distingue as três desativações que se parecem na tela e se resolvem de formas diferentes: `falha_renovacao` (costuma voltar sozinha), `revogada_no_gateway` (exige reconectar) e `desconectada_pelo_inquilino` (foi alguém decidindo) — a troca deliberada de conexão pelo admin da central também passa por aqui, como `desconectada_pelo_inquilino`.
 
-**RN-121 (RN-104)** — `access_token_ref` e `refresh_token_ref` guardam o **nome do secret** no cofre (Supabase Vault / Railway), nunca o token. Token de OAuth em tabela de aplicação é credencial de movimentar dinheiro alheio em texto legível. Ninguém lê o token pela aplicação, nem o operador — quem o usa é a chamada ao gateway, que o busca no cofre no ato.
+**RN-121 (RN-104)** — `access_token_ref` e `refresh_token_ref` guardam o **nome do secret** no cofre, nunca o token. Token de OAuth em tabela de aplicação é credencial de movimentar dinheiro alheio em texto legível. Ninguém lê o token pela aplicação, nem o operador — quem o usa é a chamada ao gateway, que o busca no cofre no ato.
+
+O cofre é o **Supabase Vault, isolado por ambiente** (decidido em 01/11/2026). O Vault é um só para o banco inteiro, e os quatro ambientes são schemas do mesmo banco: acesso direto da role da aplicação a ele deixaria quem tem o `.env` de dev ler o token de produção de uma denominação. Por isso nenhuma role `app_*` enxerga o Vault. Cada ambiente tem uma role `cofre_<ambiente>`, sem login, dona de três funções `security definer` (`ler`, `gravar`, `apagar`) no schema `cofre_<ambiente>`, que prefixam o nome do segredo com o ambiente — `app_dev` não tem como pedir um segredo `prod:`. A estrutura é criada por `infra/cofre-por-ambiente.sql`, como `postgres`, uma vez por ambiente; a aplicação a usa por `src/cofre/cofre.ts`.
 
 **RN-122 (RN-104, RN-105)** — Rotina diária renova todo token com menos de 15 dias para expirar. Renovação falhada incrementa `falhas_refresh` e alerta operador e admin da denominação. Na terceira falha, marca `ativa = false`, grava `motivo_desativacao = falha_renovacao` e bloqueia **emissão de cobrança nova** — não cobrança já emitida, que continua pagável — **antes** de o inscrito descobrir na hora de pagar (RN-098). Quem conecta é admin da denominação (conexão do inquilino) ou admin da central (conexão da central); o operador não conecta recebimento de ninguém.
 

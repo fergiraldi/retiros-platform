@@ -643,6 +643,75 @@ O que a área pública da F1 (`src/publico/`) deixou de fora, ou decidiu diferen
 
 ---
 
+## Item 9 — conexão de recebimento com o Mercado Pago (01/11/2026)
+
+O que `src/recebimento/` deixou de fora de propósito, e o que foi achado no caminho.
+
+### ~~`conexao_gateway_unica` contradizia a RN-105~~
+
+- **Status**: **resolvido em 01/11/2026**, pela `migrations/0010_conexao_gateway_ativa_unica.sql`.
+  A constraint `unique (inquilino_id, central_id, gateway)` da 0000 ignorava `ativa`: reconectar
+  uma central violava a constraint (a linha antiga, desativada, ocupava o trio), e no escopo do
+  inquilino o `central_id` nulo deixava existir **duas conexões ativas** — a cobrança sortearia
+  para onde vai o dinheiro. Virou índice único parcial `where ativa`, com `nulls not distinct`.
+  Coberto por teste.
+
+### Pendências da conexão
+
+- **Agendamento da renovação**: `ConexaoRecebimentoService.renovarConexoesAVencer()` existe e
+  está testada, mas nada a chama todo dia. Entra com o item 16 (rotinas agendadas). O token vale
+  180 dias, então não há pressa antes da primeira conexão real.
+- **Alerta de falha de renovação** (RN-122) a operador e admin depende do envio de notificação
+  (item 19). Hoje a falha só incrementa `falhas_refresh`, desativa na terceira e vai para o log.
+- **Desconectar pela tela** (`motivo_desativacao = desconectada_pelo_inquilino` por decisão, não
+  por reconexão) não tem rota. Nasce com a tela de recebimento do admin (itens 8 e 21).
+- **`state` do OAuth em memória do processo** — uma réplica por ambiente hoje. Com mais de uma, a
+  volta do Mercado Pago pode cair em outra réplica e falhar: mover para uma tabela com validade.
+- **PKCE não é usado.** É opcional no Mercado Pago, e o segredo da aplicação fica só no servidor.
+  Se for ligado no painel, o Mercado Pago passa a exigir `code_challenge` e a conexão quebra até o
+  código acompanhar.
+- **A página de volta do front é `/admin/recebimento?conexao=ok|erro|recusada`** — escolha da API,
+  à espera do front existir.
+- **401 do gateway desativando a conexão na hora** (RN-327) é do item 11, que é quem chama o
+  gateway com o token da denominação.
+
+---
+
+## Domínio da plataforma (29/10/2026)
+
+Levantado ao planejar o registro do domínio, que ainda não existe. Nenhum dos dois quebra nada
+hoje — `inquilino_dominio` está vazio em hom e prod —, mas os dois precisam estar decididos antes
+de configurar o DNS de produção.
+
+### Subdomínios da plataforma não são reservados
+
+- **Descrição**: o check `inquilino_slug_formato` (`migrations/0000_estrutura.sql`) aceita qualquer
+  slug no formato, inclusive `api`, `operador`, `www` e o subdomínio de envio de e-mail
+  (`envio`, no plano atual). O subdomínio da denominação é uma linha de `inquilino_dominio`, então
+  nada impede que um deles vá para um inquilino.
+- **Impacto**: `operador` não vaza nada — o `ReconhecedorDeHostService` confere o host do operador
+  antes do de inquilino, e a denominação ficaria inalcançável. Os outros colidem com registro DNS
+  da plataforma.
+- **Status**: aberto, para o item 8 (onboarding): lista de nomes reservados recusada na criação do
+  inquilino.
+
+### Não está definido como o navegador chega à API com o `Host` do inquilino
+
+- **Descrição**: a API resolve o inquilino pelo `Host` (RN-059t), e o curinga `*.<dominio>`
+  aponta para o front na Vercel (PRD §8.1, "Consequências da hospedagem"). Se o front chamar a
+  API em outro host (`api.<dominio>`), o `Host` que chega é o da API e toda rota não isenta
+  responde `404`. O CORS dinâmico (RN-061t) sugere chamada entre origens, e isso não fecha com a
+  resolução por `Host`.
+- **Caminho provável**: a Vercel repassa `/api/*` do próprio host do inquilino para a Railway,
+  preservando o host original em `X-Forwarded-Host`. Isso vale também para domínio próprio sem
+  configuração extra, mas acrescenta um salto de proxy (Vercel → edge da Railway): muda o
+  `PROXIES_CONFIAVEIS` e reabre o argumento de "único caminho de entrada" do README. Falta medir o
+  que a Railway faz com um `X-Forwarded-Host` que já chega preenchido.
+- **Status**: aberto. Decidir antes do DNS de produção; é o mesmo bloqueio "DNS curinga +
+  certificado TLS" de [proximos-passos.md](proximos-passos.md).
+
+---
+
 ## Template para a próxima iteração
 
 ```

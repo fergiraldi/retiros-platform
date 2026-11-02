@@ -18,7 +18,11 @@ Zero integração com Mercado Pago, zero envio de e-mail (as notificações fica
 
 **Estimativa total: 204 a 313 horas** de desenvolvimento (≈ 5 a 8 semanas de um dev
 full-time), sem contar os bloqueios não-código listados no fim deste documento. Desse
-total, **44 a 70 horas já saíram**, com os itens 5, 6, 10 e 23.
+total, **58 a 90 horas já saíram**, com os itens 5, 6, 9, 10 e 23.
+
+O item 9 andou antes do 8, de que a tabela o dava como dependente: a conexão não precisa do
+onboarding para existir, só de uma conta de admin — e o 8 está preso ao 19 (ver abaixo). Quando o
+onboarding chegar, o passo "conectar o recebimento" dele é chamar a rota que já existe.
 
 ## O que já está pronto
 
@@ -66,7 +70,7 @@ total, **44 a 70 horas já saíram**, com os itens 5, 6, 10 e 23.
 | 6 | ~~Rate limit por IP e por CPF (RNF-012)~~ — concluído (em memória) | 8-14 | 1 |
 | 7 | Logging estruturado + request-id | 6-10 | — |
 | 8 | Onboarding do inquilino F0 | 14-20 | 5, 2 |
-| 9 | Cliente HTTP Mercado Pago + OAuth | 14-20 | 8 |
+| 9 | ~~Cliente HTTP Mercado Pago + OAuth~~ — concluído (conexão, cofre e renovação; o agendamento é o 16) | 14-20 | 8 |
 | 10 | ~~Ficha de inscrição pública F1~~ — concluído (agenda, página e ficha) | 16-24 | 2, 6, 3 |
 | 11 | Criação de cobrança Pix/cartão + split | 12-18 | 9, 10 |
 | 12 | Webhook: recepção + máquina de estados | 12-18 | 11 |
@@ -155,6 +159,16 @@ desenvolvimento, mas precisam ser resolvidos em paralelo:
   tipicamente só por IP) — risco real de subestimar o esforço do item 6.
 - SDK/contrato do Mercado Pago ainda não escolhido nem instalado — cliente HTTP, OAuth,
   split e idempotência de webhook partem do zero.
+- **A API de Payments do Mercado Pago está marcada como "será descontinuada em breve"** no
+  painel (visto em 29/10/2026, ao criar a aplicação `retiros-pagamentos`), e a substituta, a API
+  de Orders, **não tem equivalente documentado ao `application_fee`** — o guia oficial de migração
+  manda tratar isso como bloqueio para fluxo com split. A aplicação foi criada sobre Payments,
+  que é a única com split no Checkout Transparente hoje. Mitigação: o item 9 isola o cliente do
+  Mercado Pago num módulo só, e o item 11 confere de novo a documentação de Orders antes de
+  começar. Trocar de aplicação é barato **até a primeira denominação conectar por OAuth** (o
+  token fica preso ao `client_id`); depois disso, toda denominação teria de reconectar. Plano B,
+  que é decisão de produto: Checkout Pro com `marketplace_fee`, ao custo de o pagamento sair da
+  nossa ficha para a página do Mercado Pago.
 - ~~Provedor de e-mail ainda em aberto no PRD~~ — **decidido em 29/10/2026: Resend**, por API
   HTTP, sem SDK. Cabe no modelo do PRD §7 ("Identidade do remetente"): domínio técnico de envio
   (SPF/DKIM) único da plataforma, com nome de exibição e endereço de resposta por inquilino e

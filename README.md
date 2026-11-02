@@ -34,6 +34,8 @@ Quatro schemas do mesmo banco Supabase, um por ambiente, cada um com sua role (`
 | `hom` | Railway | `develop` | automático a cada push, depois do CI passar | aplicadas no deploy |
 | `prod` | Railway | `main` | automático a cada merge, depois do CI passar | aplicadas no deploy |
 
+**Cofre de segredos.** Os tokens OAuth do Mercado Pago das denominações vão para o Supabase Vault, que é um só para o banco inteiro. Para um ambiente não ler o segredo do outro, nenhuma role `app_*` enxerga o Vault: cada ambiente tem uma role `cofre_<ambiente>` e três funções que só alcançam os segredos dele. A estrutura **não** vem das migrations, porque a role da aplicação não cria role nem vê o Vault: é o `infra/cofre-por-ambiente.sql`, rodado no SQL Editor como `postgres`, uma vez por ambiente. Ambiente sem ele sobe normalmente, mas a conexão do recebimento falha, e o CI reprova sem o `cofre_ci`.
+
 ### Fluxo de branches
 
 `develop` e `main` são as duas branches permanentes — irmãs, não mãe e filha; nenhuma é criada por tarefa nem apagada no merge. O trabalho do dia a dia acontece na `develop`; a `main` só recebe o que passa por pull request.
