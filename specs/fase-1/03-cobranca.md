@@ -186,6 +186,7 @@ Erros:
 | 422 | `TOKEN_EXPIRADO` | token de cartão vencido |
 | 402 | `PAGAMENTO_RECUSADO` | recusa do emissor; inclui `motivoRecusa` |
 | 202 | `PROCESSANDO` | timeout no gateway (RN-302) |
+| 422 | `PAGAMENTO_ONLINE_ENCERRADO` | depois do marco de corte (RN-041), ou Pix a menos de 30 min dele — o Mercado Pago não aceita vencimento mais curto; daí em diante, só na recepção |
 | 429 | `MUITAS_TENTATIVAS` | limite de regeração ou de tentativas |
 
 Não há erro para conexão de gateway indisponível: a cobrança nasce `pendente_emissao` (RN-098, §7.3) e a resposta é `201`, sem `qrCode`/`linkPagamento`, com a vaga já reservada.

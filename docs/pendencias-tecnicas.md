@@ -643,6 +643,51 @@ O que a área pública da F1 (`src/publico/`) deixou de fora, ou decidiu diferen
 
 ---
 
+## Item 11 — cobrança pública da inscrição (01/11/2026)
+
+O que `src/cobranca/` deixou de fora de propósito, e as decisões que a spec não tomava.
+
+### Fica para os itens seguintes
+
+- **Regeração do Pix** (RN-306, RN-307, §3.2): sem a rotina de expiração (item 16), nenhum Pix
+  passa a `expirada` no nosso banco, e não há o que regerar. Entra junto com o 16.
+- **Reconciliação** (RN-144, 04-webhook.md §6): cobrança que ficou `criada` porque o gateway não
+  respondeu (RN-302, `202`) só sai dali pela reconciliação, que é do item 12. Até lá, ela segura a
+  inscrição: um novo pedido recebe `409` com ela.
+- **Emitir as pendentes quando a conexão voltar** (§7.3, "Restabelecida a conexão"): a cobrança
+  nasce `pendente_emissao` sem conexão, mas nada a emite depois. Vai com o webhook (item 12) ou com
+  a tela de recebimento.
+- **`notification_url`** não é enviada: o endereço do webhook nasce com o item 12, que decide entre
+  mandá-lo por pagamento ou configurá-lo na aplicação do painel.
+- **Pagamento aprovado para inscrição que já não está pendente** (RN-208): a cobrança fica `paga`,
+  a inscrição não é ressuscitada, e a devolução pendente que a regra pede é do item 12.
+
+### Decisões tomadas aqui
+
+- **`PAGAMENTO_ONLINE_ENCERRADO` (422)** é código novo: a spec dizia que depois do marco de corte não
+  se cria cobrança online (RN-041), mas não dizia o que responder. Entrou na tabela de §3.1.
+- **Pix também recusa a menos de 30 minutos do marco**: o Mercado Pago não aceita vencimento mais
+  curto que isso.
+- **401 do gateway leva a cobrança a `pendente_emissao`** (RN-327). A transição `criada →
+  pendente_emissao` não está no diagrama de §1. É o mesmo desfecho de "sem conexão", descoberto um
+  passo depois, e a vaga continua da pessoa (RN-098).
+- **Limite de tentativas da cobrança**: 10 por IP a cada 10 minutos e 10 por inscrição por hora. A
+  RNF-012 manda limitar toda rota pública que cria registro, mas não dá número. Sem limite, um token
+  de consulta vazado vira bancada de teste de cartão roubado.
+
+### Riscos a conferir no sandbox
+
+- **O Pix vai sem o CPF do pagador.** O CPF mora só em `identidade`, que a RN-124 fecha para a
+  aplicação. A documentação não diz que é obrigatório, mas o exemplo dela manda. Se o Mercado Pago
+  recusar, o front passa a mandar o CPF no corpo do Pix, como já faz no cartão.
+- **O formato de `date_of_expiration`** (`...T...-03:00`) segue o padrão da documentação, que não traz
+  exemplo JSON do campo para o Pix.
+- **Bandeira, últimos quatro dígitos e valor da parcela não são guardados**: vão só na resposta da
+  criação. O polling (`GET`) não os devolve, e a tabela não tem coluna para eles nem para o
+  `payload_gateway` que a RN-319 cita.
+
+---
+
 ## Item 9 — conexão de recebimento com o Mercado Pago (01/11/2026)
 
 O que `src/recebimento/` deixou de fora de propósito, e o que foi achado no caminho.

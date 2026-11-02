@@ -18,7 +18,7 @@ Zero integração com Mercado Pago, zero envio de e-mail (as notificações fica
 
 **Estimativa total: 204 a 313 horas** de desenvolvimento (≈ 5 a 8 semanas de um dev
 full-time), sem contar os bloqueios não-código listados no fim deste documento. Desse
-total, **58 a 90 horas já saíram**, com os itens 5, 6, 9, 10 e 23.
+total, **70 a 108 horas já saíram**, com os itens 5, 6, 9, 10, 11 e 23.
 
 O item 9 andou antes do 8, de que a tabela o dava como dependente: a conexão não precisa do
 onboarding para existir, só de uma conta de admin — e o 8 está preso ao 19 (ver abaixo). Quando o
@@ -72,7 +72,7 @@ onboarding chegar, o passo "conectar o recebimento" dele é chamar a rota que j�
 | 8 | Onboarding do inquilino F0 | 14-20 | 5, 2 |
 | 9 | ~~Cliente HTTP Mercado Pago + OAuth~~ — concluído (conexão, cofre e renovação; o agendamento é o 16) | 14-20 | 8 |
 | 10 | ~~Ficha de inscrição pública F1~~ — concluído (agenda, página e ficha) | 16-24 | 2, 6, 3 |
-| 11 | Criação de cobrança Pix/cartão + split | 12-18 | 9, 10 |
+| 11 | ~~Criação de cobrança Pix/cartão + split~~ — concluído (regeração do Pix vai com o 16) | 12-18 | 9, 10 |
 | 12 | Webhook: recepção + máquina de estados | 12-18 | 11 |
 | 13 | Consulta/edição da inscrição por token | 4-6 | 10 |
 | 14 | Cancelamento com reembolso | 6-10 | 11 |
