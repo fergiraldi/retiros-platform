@@ -178,6 +178,7 @@ export const conexaoGateway = pgTable("conexao_gateway", {
 	motivoDesativacao: text("motivo_desativacao"),
 	criadoEm: timestamp("criado_em", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	uniqueIndex("conexao_gateway_ativa_unica").using("btree", table.inquilinoId.asc().nullsLast().op("uuid_ops"), table.centralId.asc().nullsLast().op("text_ops"), table.gateway.asc().nullsLast().op("uuid_ops")).where(sql`ativa`),
 	foreignKey({
 			columns: [table.centralId],
 			foreignColumns: [central.id],
@@ -188,7 +189,6 @@ export const conexaoGateway = pgTable("conexao_gateway", {
 			foreignColumns: [inquilino.id],
 			name: "conexao_gateway_inquilino_id_fkey"
 		}),
-	unique("conexao_gateway_unica").on(table.inquilinoId, table.centralId, table.gateway),
 	pgPolicy("conexao_gateway_central", { as: "permissive", for: "all", to: ["public"], using: sql`((app_papel() = ANY ('{admin_denominacao}'::text[])) OR (central_id IS NULL) OR (central_id = app_central_id()))`, withCheck: sql`((app_papel() = ANY ('{admin_denominacao}'::text[])) OR (central_id IS NULL) OR (central_id = app_central_id()))`  }),
 	pgPolicy("conexao_gateway_inquilino", { as: "restrictive", for: "all", to: ["public"] }),
 ]);
